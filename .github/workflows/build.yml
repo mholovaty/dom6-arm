@@ -1,0 +1,88 @@
+# Compile-only build matrix.
+#
+# Builds the loader for each supported target+OS combination using the
+# committed data/<DOM6_VERSION>/ tables — no game binary required.
+# Uploads each platform's binary as a workflow artifact so PRs can be
+# smoke-tested by downloading the artifact and running it against a
+# real dom6_mac locally.
+#
+# Triggers: push to main, every pull request, manual run.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel in-flight runs from the same branch when new commits land —
+# keeps queue times sane and saves runner minutes.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-arm64:
+    name: Linux ARM64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              build-essential \
+              libgl1-mesa-dev \
+              libglu1-mesa-dev \
+              libbz2-dev \
+              zlib1g-dev
+
+      - name: make build
+        run: make build
+
+      - name: Show artifact
+        run: |
+          file build/loader/dom6_aarch64
+          ls -la build/loader/dom6_aarch64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dom6_aarch64-linux-arm64
+          path: build/loader/dom6_aarch64
+          if-no-files-found: error
+
+  windows-arm64:
+    name: Windows ARM64
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANGARM64
+          update: true
+          install: >-
+            make
+            mingw-w64-clang-aarch64-toolchain
+            mingw-w64-clang-aarch64-SDL2
+            mingw-w64-clang-aarch64-zlib
+            mingw-w64-clang-aarch64-bzip2
+
+      - name: make LOADER_OS=win32 build
+        run: make LOADER_OS=win32 CC=clang build
+
+      - name: Show artifact
+        run: |
+          file build/loader/dom6_aarch64.exe
+          ls -la build/loader/dom6_aarch64.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dom6_aarch64-windows-arm64
+          path: build/loader/dom6_aarch64.exe
+          if-no-files-found: error
