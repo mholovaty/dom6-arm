@@ -1,0 +1,12 @@
+# Python dependencies for tools/.
+#
+# These are only needed by the maintainer-side scripts that regenerate
+# data/<dom6_version>/ from a dom6_mac binary (build_loader.py + sdl_lookup.py).
+# Normal builds (make build) don't run any Python — once data/ is populated
+# the loader is pure C.
+#
+# Install:  pip install -r requirements.txt
+
+# Mach-O parsing (used by tools/build_loader.py and tools/sdl_lookup.py).
+# 0.14 is the earliest stable release with the segments / bindings API we use.
+lief>=0.14

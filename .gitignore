@@ -1,0 +1,16 @@
+# Build artifacts (everything codegen + compile produces)
+build/
+
+# User-supplied game binary (Steam-licensed, never committed)
+origin/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Editor
+.vscode/
+*.swp
+*~
