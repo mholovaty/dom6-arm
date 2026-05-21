@@ -77,7 +77,13 @@ void install_sdl_redirect(void) {
     if (!h) {
         fprintf(stderr, "[loader] FATAL: os_lib_open(%s) failed: %s\n",
                 libname, os_lib_error());
+#ifdef _WIN32
+        fprintf(stderr, "[loader] Ensure arm64\\SDL2.dll sits next to the exe — "
+                        "extract dom6_arm64-windows.zip into the Dominions6 "
+                        "install dir so arm64\\SDL2.dll lands beside dom6_arm64.exe.\n");
+#else
         fprintf(stderr, "[loader] Install libSDL2 on host (e.g. apt install libsdl2-2.0-0)\n");
+#endif
         _exit(98);
     }
 
@@ -138,7 +144,13 @@ void install_gl_redirect(void) {
     if (!libgl) {
         fprintf(stderr, "[loader] FATAL: os_lib_open(libGL.so.1) failed: %s\n",
                 os_lib_error());
+#ifdef _WIN32
+        fprintf(stderr, "[loader] opengl32.dll should ship with Windows — "
+                        "this likely indicates a broken install or missing "
+                        "graphics drivers.\n");
+#else
         fprintf(stderr, "[loader] Install host OpenGL (e.g. apt install libgl1)\n");
+#endif
         _exit(97);
     }
     if (!libglu) {
