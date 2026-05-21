@@ -68,9 +68,12 @@
 #include <GL/glext.h>
 #endif  /* _WIN32 */
 
-/* Path to the Mac binary — override with DOM6_MAC env var at runtime. */
+/* Default path to the Mac binary, looked up relative to cwd.
+ * Matches the Dominions 6 Steam install layout: dom6_mac sits next to
+ * Dominions6.exe / dom6_amd64 in the install root.  Override at runtime
+ * with the DOM6_MAC_PATH env var. */
 #ifndef DOM6_MAC_PATH
-#define DOM6_MAC_PATH "origin/dom6_mac"
+#define DOM6_MAC_PATH "dom6_mac"
 #endif
 
 extern FILE *mac_stderr_val;
