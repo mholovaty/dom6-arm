@@ -176,7 +176,21 @@ static __thread char tls_lib_err[256];
 
 os_lib_t os_lib_open(const char *posix_soname) {
     const char *win_name = win_lib_name(posix_soname);
-    HMODULE h = LoadLibraryA(win_name);
+
+    /* Look in <exe-dir>\arm64\ first so a DLL bundled with our artifact
+     * wins over a same-named DLL in the install-dir root (which may be
+     * the x86_64 game's incompatible copy).  LOAD_LIBRARY_SEARCH_APPLICATION_DIR
+     * makes Windows resolve relative paths from the exe's directory. */
+    HMODULE h = NULL;
+    char private_path[MAX_PATH];
+    int n = snprintf(private_path, sizeof private_path, "arm64\\%s", win_name);
+    if (n > 0 && (size_t)n < sizeof private_path) {
+        h = LoadLibraryExA(private_path, NULL, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+    }
+
+    /* Fall back to the standard DLL search order. */
+    if (!h) h = LoadLibraryA(win_name);
+
     if (!h) {
         DWORD err = GetLastError();
         snprintf(tls_lib_err, sizeof tls_lib_err,
