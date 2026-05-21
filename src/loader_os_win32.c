@@ -174,21 +174,37 @@ static const char *win_lib_name(const char *posix_soname) {
 
 static __thread char tls_lib_err[256];
 
+/* Cached <exe-dir> — captured once via GetModuleFileNameA so subsequent
+ * chdir() calls (e.g. into the virtual MacOS bundle dir) don't move it. */
+static const char *exe_dir(void) {
+    static char dir[MAX_PATH] = {0};
+    if (dir[0]) return dir;
+    DWORD n = GetModuleFileNameA(NULL, dir, sizeof dir);
+    if (n == 0 || n >= sizeof dir) { dir[0] = '.'; dir[1] = '\0'; return dir; }
+    char *slash = strrchr(dir, '\\');
+    if (slash) *slash = '\0';
+    return dir;
+}
+
 os_lib_t os_lib_open(const char *posix_soname) {
     const char *win_name = win_lib_name(posix_soname);
 
     /* Look in <exe-dir>\arm64\ first so a DLL bundled with our artifact
-     * wins over a same-named DLL in the install-dir root (which may be
-     * the x86_64 game's incompatible copy).  LOAD_LIBRARY_SEARCH_APPLICATION_DIR
-     * makes Windows resolve relative paths from the exe's directory. */
+     * wins over a same-named DLL in the install-dir root (which is likely
+     * the x86_64 game's incompatible copy — LoadLibraryA on that returns
+     * ERROR_BAD_EXE_FORMAT/193).  Use an absolute path: a relative path
+     * with separators is resolved against CWD, and main() chdir()s into
+     * the virtual MacOS bundle dir before any os_lib_open() call. */
     HMODULE h = NULL;
     char private_path[MAX_PATH];
-    int n = snprintf(private_path, sizeof private_path, "arm64\\%s", win_name);
+    int n = snprintf(private_path, sizeof private_path,
+                     "%s\\arm64\\%s", exe_dir(), win_name);
     if (n > 0 && (size_t)n < sizeof private_path) {
-        h = LoadLibraryExA(private_path, NULL, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+        h = LoadLibraryA(private_path);
     }
 
-    /* Fall back to the standard DLL search order. */
+    /* Fall back to the standard DLL search order (System32 etc.) for
+     * libs we don't bundle, like opengl32.dll. */
     if (!h) h = LoadLibraryA(win_name);
 
     if (!h) {
