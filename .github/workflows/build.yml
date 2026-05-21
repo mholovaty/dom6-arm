@@ -65,11 +65,20 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           msystem: CLANGARM64
-          update: true
+          # `update: false` skips `pacman -Syuu` (the cache key is content-
+          # addressed so we don't miss security updates anyway — bump the
+          # `install:` list to force a refresh).
+          update: false
           cache: true
+          # Explicit minimal package list — drops the `…-toolchain` meta
+          # which pulled in clang-extras / lld / lldb / mlir / polly etc.
+          # we don't link.  Smaller package set = smaller cache, faster
+          # pacman install, faster cache restore.
           install: >-
             make
-            mingw-w64-clang-aarch64-toolchain
+            mingw-w64-clang-aarch64-clang
+            mingw-w64-clang-aarch64-zlib
+            mingw-w64-clang-aarch64-bzip2
             mingw-w64-clang-aarch64-SDL2
 
       - name: make LOADER_OS=win32 STATIC=1 build
