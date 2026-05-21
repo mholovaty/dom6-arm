@@ -53,7 +53,7 @@ SRC_DIR      := src
 DATA_DIR     := data/$(DOM6_VERSION)
 BUILD_DIR    := build/loader
 ifeq ($(LOADER_OS),win32)
-LOADER_BIN   := $(BUILD_DIR)/dom6_aarch64.exe
+LOADER_BIN   := $(BUILD_DIR)/dom6_arm64.exe
 else
 LOADER_BIN   := $(BUILD_DIR)/dom6_aarch64
 endif

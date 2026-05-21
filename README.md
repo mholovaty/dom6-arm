@@ -1,7 +1,8 @@
-# dom6-arm
+# Dominions 6 ARM64 Loader (`dom6-arm`)
 
-Run the Mac ARM64 build of [Dominions 6](https://www.illwinter.com/dom6/)
-natively on **Linux ARM64** and **Windows ARM64** — no x86 emulation.
+Native **ARM64 executables** of
+[Dominions 6](https://www.illwinter.com/dom6/) for **Windows** and
+**Linux** — no x86 emulation.
 
 ## Why
 
@@ -11,17 +12,21 @@ x86_64 build through emulation (qemu on Linux, Microsoft Prism on
 Windows) — which isn't always reliable and carries a noticeable
 performance penalty.
 
-But the same release also ships a **native ARM64** binary for macOS.
-This project reuses that Mac binary on Linux and Windows by mmapping
-its segments at their original virtual addresses and substituting only
-the OS-boundary calls (libc, SDL, GL, sockets).  All ARM64 game code
-runs unchanged, so:
+`dom6-arm` is a small loader that runs Dominions 6's native ARM64 game
+code on those OSes directly, translating only the OS-boundary calls
+(libc, SDL, GL, sockets).  No emulation, no x86 in the loop.
 
-- **Linux ARM64** users get a native build where there wasn't one.
+- **Linux ARM64** users (Raspberry Pi 5, Rockchip RK3588 SBCs like
+  Orange Pi 5, Apple Silicon under Asahi Linux, Ampere / AWS Graviton
+  servers, etc.) get a native build where there wasn't one.
 - **Windows ARM64** users (Snapdragon X / 8cx Gen 2+, etc.) get the
   same.
-- **One binary across OSes**: no separate Mac and Windows ports to
-  track, no game-side modifications.
+- **One loader across OSes**, no separate ports to track and no
+  game-side modifications.
+
+The ARM64 game code itself comes from Dominions 6's macOS build, which
+the loader reuses unchanged — an implementation detail invisible to
+users.
 
 ## Note
 
