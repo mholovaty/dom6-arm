@@ -102,13 +102,21 @@ jobs:
           cp /clangarm64/bin/SDL2.dll  dist/arm64/
           cp /clangarm64/bin/zlib1.dll dist/arm64/
           # Mesa + its transitive deps (libLLVM is ~140 MB and dominates
-          # the zip size — Mesa uses it for shader codegen).
-          for d in opengl32.dll libgallium_wgl.dll libc++.dll \
-                   libffi-8.dll libiconv-2.dll libintl-8.dll \
-                   libLLVM-22.dll libSPIRV-Tools.dll libsystre-0.dll \
-                   libtre-5.dll libxml2-16.dll libzstd.dll; do
-              cp "/clangarm64/bin/$d" dist/arm64/
-          done
+          # the zip size — Mesa uses it for shader codegen).  The
+          # libLLVM-NN.dll soname bumps with each MSYS2 LLVM upgrade,
+          # so glob it instead of hard-coding the version.
+          cp /clangarm64/bin/opengl32.dll        dist/arm64/
+          cp /clangarm64/bin/libgallium_wgl.dll  dist/arm64/
+          cp /clangarm64/bin/libc++.dll          dist/arm64/
+          cp /clangarm64/bin/libffi-*.dll        dist/arm64/
+          cp /clangarm64/bin/libiconv-*.dll      dist/arm64/
+          cp /clangarm64/bin/libintl-*.dll       dist/arm64/
+          cp /clangarm64/bin/libLLVM-*.dll       dist/arm64/
+          cp /clangarm64/bin/libSPIRV-Tools.dll  dist/arm64/
+          cp /clangarm64/bin/libsystre-*.dll     dist/arm64/
+          cp /clangarm64/bin/libtre-*.dll        dist/arm64/
+          cp /clangarm64/bin/libxml2-*.dll       dist/arm64/
+          cp /clangarm64/bin/libzstd.dll         dist/arm64/
           ls -laR dist/
 
       - uses: actions/upload-artifact@v4
