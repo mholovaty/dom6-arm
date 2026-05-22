@@ -4,6 +4,9 @@ build/
 # User-supplied game binary (Steam-licensed, never committed)
 origin/
 
+# Per-user dom6 CD key for running the loader (Steam-licensed, secret).
+dom6key
+
 # Python
 __pycache__/
 *.pyc
