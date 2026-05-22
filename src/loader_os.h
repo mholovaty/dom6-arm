@@ -116,6 +116,13 @@ void os_print_memory_map(uint64_t pc, uint64_t lr);
 /* Make SIGPIPE a no-op (POSIX); no-op on Win32 (sockets don't raise). */
 void os_ignore_broken_pipe(void);
 
+/* Early per-OS startup hook.  Win32 narrows the default DLL search to
+ * <exe-dir>\arm64 + System32 so our bundled SDL2 / Mesa DLLs win over
+ * any same-named DLLs in the install root (e.g. Steam's x86_64
+ * sdl2.dll, zlib1.dll), and defaults GALLIUM_DRIVER=zink so Mesa's
+ * opengl32.dll routes GL→Vulkan→GPU.  No-op on POSIX. */
+void os_early_init(void);
+
 #ifdef __cplusplus
 }
 #endif

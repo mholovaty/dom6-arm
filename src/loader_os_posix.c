@@ -168,3 +168,9 @@ void os_print_memory_map(uint64_t pc, uint64_t lr) {
 void os_ignore_broken_pipe(void) {
     signal(SIGPIPE, SIG_IGN);
 }
+
+void os_early_init(void) {
+    /* Win-specific DLL-search and GALLIUM_DRIVER defaults don't apply
+     * on POSIX: dlopen() honours ld.so.cache + RPATH + LD_LIBRARY_PATH,
+     * and host libGL is provided by the distro's mesa-libgl package. */
+}

@@ -52,6 +52,8 @@ int main(int argc, char **argv) {
     setvbuf(stderr, NULL, _IONBF, 0);
     atexit(loader_atexit_marker);
 #endif
+    /* OS-specific early setup (Win: DLL search path + GALLIUM_DRIVER). */
+    os_early_init();
     install_crash_handler();
     install_shim_dump_handler();
     /* macOS ignores SIGPIPE on sockets by default; Linux terminates.
