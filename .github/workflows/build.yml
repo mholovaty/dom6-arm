@@ -65,10 +65,16 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           msystem: CLANGARM64
-          # `update: false` skips `pacman -Syuu` (the cache key is content-
-          # addressed so we don't miss security updates anyway — bump the
-          # `install:` list to force a refresh).
-          update: false
+          # `update: true` runs `pacman -Syuu` and invalidates the
+          # content-addressed cache when the upstream repo moves —
+          # critical for mingw-w64-clang-aarch64-mesa, which we ship
+          # in the Win zip and which has shader-codegen bugs that get
+          # fixed in newer Mesa+LLVM combos.  A cached older Mesa+LLVM
+          # pair shipped to users triggered VK_ERROR_UNKNOWN crashes
+          # inside Qualcomm's Adreno Vulkan driver; switching to the
+          # current MSYS2 packages (Mesa 26.1+, LLVM 22+) clears it.
+          # Costs ~60-90s per run.
+          update: true
           cache: true
           # Explicit minimal package list — drops the `…-toolchain` meta
           # which pulled in clang-extras / lld / lldb / mlir / polly etc.
