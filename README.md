@@ -47,15 +47,26 @@ ARM64 build by default.
 
 You need: a legitimately licensed copy of Dominions 6 with the macOS
 binary (`dom6_mac`) accessible to the box, plus host Mesa/SDL2
-packages.
+packages.  Minimum **glibc 2.38** — covers Ubuntu 24.04 LTS, Debian 13,
+Fedora 39+, and current rolling distros (Arch, openSUSE Tumbleweed,
+Asahi).  Ubuntu 22.04, Debian 12, and stock Raspberry Pi OS bookworm
+are too old; either upgrade or build from source.
 
 1. Download
    [`dom6_aarch64-linux.zip`](https://nightly.link/mholovaty/dom6-arm/workflows/build/main/dom6_aarch64-linux.zip)
    and extract it (it contains a single `dom6_aarch64` binary).
-2. Install runtime dependencies (Debian/Ubuntu):
+2. Install runtime dependencies — pick the line for your distro:
    ```
-   sudo apt install libgl1 libglu1-mesa libsdl2-2.0-0
+   # Debian / Ubuntu / Pi OS
+   sudo apt install libsdl2-2.0-0 libgl1 libglu1-mesa
+
+   # Fedora / RHEL
+   sudo dnf install SDL2 mesa-libGL mesa-libGLU
+
+   # Arch / Manjaro
+   sudo pacman -S sdl2 libglvnd glu
    ```
+   `zlib` and `bzip2` are in every base install — no extra step.
 3. Put `dom6_aarch64` somewhere convenient.  Point it at your
    `dom6_mac` via the `DOM6_MAC_PATH` env var, or just place it in the
    same directory as `dom6_mac`:
