@@ -65,32 +65,20 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           msystem: CLANGARM64
-          # `update: false` skips `pacman -Syuu`.  The setup-msys2
-          # cache is content-addressed by the install list below, so
-          # bumping any pinned version (or adding/removing a package)
-          # invalidates the cache and triggers a fresh pacman install.
-          update: false
+          # `update: true` runs `pacman -Syuu` so Mesa + LLVM track
+          # MSYS2's current repo state.  Older cached Mesa (26.0.1
+          # + LLVM 21) crashed Adreno's Vulkan driver on Snapdragon X.
+          update: true
           cache: true
-          # Explicit minimal package list — drops the `…-toolchain` meta
-          # which pulled in clang-extras / lld / lldb / mlir / polly etc.
-          # we don't link.  Smaller package set = smaller cache, faster
-          # pacman install, faster cache restore.
-          #
-          # mesa is pinned: Mesa 26.0.1 + LLVM 21 (the "current latest"
-          # MSYS2 was serving in May 2026) ships shader codegen that
-          # trips `vkCreateGraphicsPipelines: VK_ERROR_UNKNOWN` inside
-          # Qualcomm's Adreno Vulkan driver (qcvkarm64xum.dll) on
-          # Snapdragon X laptops.  26.1.0-2 + the LLVM 22 it depends
-          # on runs the dom6 benchmark cleanly (~45-70 fps).  Bump
-          # whenever MSYS2 drops 26.1.0-2 — but verify against an
-          # Adreno device first, the new ones don't always work.
+          # Drops the `…-toolchain` meta (clang-extras/lld/lldb/mlir/
+          # polly) we don't link, for a smaller cache.
           install: >-
             make
             mingw-w64-clang-aarch64-clang
             mingw-w64-clang-aarch64-zlib
             mingw-w64-clang-aarch64-bzip2
             mingw-w64-clang-aarch64-SDL2
-            mingw-w64-clang-aarch64-mesa=26.1.0-2
+            mingw-w64-clang-aarch64-mesa
 
       - name: make LOADER_OS=win32 STATIC=1 build
         run: make LOADER_OS=win32 CC=clang STATIC=1 build
