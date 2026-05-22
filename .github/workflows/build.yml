@@ -1,0 +1,124 @@
+# Compile-only build matrix.
+#
+# Builds the loader for each supported target+OS combination using the
+# committed data/<DOM6_VERSION>/ tables — no game binary required.
+# Uploads each platform's binary as a workflow artifact so PRs can be
+# smoke-tested by downloading the artifact and running it against a
+# real dom6_mac locally.
+#
+# Triggers: push to main, every pull request, manual run.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel in-flight runs from the same branch when new commits land —
+# keeps queue times sane and saves runner minutes.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-arm64:
+    name: Linux ARM64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        # Caches the installed package set keyed on the literal `packages`
+        # list below.  Changes here invalidate the cache and trigger a
+        # fresh apt install; otherwise the action restores dpkg state
+        # without going to the network.
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: build-essential libgl1-mesa-dev libglu1-mesa-dev libbz2-dev zlib1g-dev
+          version: 1.0  # bump to force a rebuild even when packages list is unchanged
+
+      - name: make build
+        run: make build
+
+      - name: Show artifact
+        run: |
+          file build/loader/dom6_aarch64
+          ls -la build/loader/dom6_aarch64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dom6_aarch64-linux
+          path: build/loader/dom6_aarch64
+          if-no-files-found: error
+
+  windows-arm64:
+    name: Windows ARM64
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANGARM64
+          # `update: true` runs `pacman -Syuu` so Mesa + LLVM track
+          # MSYS2's current repo state.  Older cached Mesa (26.0.1
+          # + LLVM 21) crashed Adreno's Vulkan driver on Snapdragon X.
+          update: true
+          cache: true
+          # Drops the `…-toolchain` meta (clang-extras/lld/lldb/mlir/
+          # polly) we don't link, for a smaller cache.
+          install: >-
+            make
+            mingw-w64-clang-aarch64-clang
+            mingw-w64-clang-aarch64-zlib
+            mingw-w64-clang-aarch64-bzip2
+            mingw-w64-clang-aarch64-SDL2
+            mingw-w64-clang-aarch64-mesa
+
+      - name: make LOADER_OS=win32 STATIC=1 build
+        run: make LOADER_OS=win32 CC=clang STATIC=1 build
+
+      - name: Stage runtime distribution
+        # STATIC=1 bakes zlib/bzip2/winpthread + the gcc runtime into the
+        # exe.  Runtime DLLs that the Mac binary calls into via dlopen
+        # (SDL2, Mesa's opengl32) live in arm64/ — the loader narrows
+        # the DLL search path to arm64\ + System32 at startup, so our
+        # bundled DLLs win over Steam's x86_64 sdl2.dll / zlib1.dll in
+        # the install root.
+        # Mesa zink (GL→Vulkan→GPU) is bundled because Win-on-ARM's
+        # stock opengl32 is GDI software GL 1.1, which can't render
+        # dom6 (needs GL 1.2+ packed pixel formats for textures).
+        run: |
+          mkdir -p dist/arm64
+          cp build/loader/dom6_arm64.exe dist/
+          # SDL2 + zlib (the latter is a Mesa transitive dep).
+          cp /clangarm64/bin/SDL2.dll  dist/arm64/
+          cp /clangarm64/bin/zlib1.dll dist/arm64/
+          # Mesa + its transitive deps (libLLVM is ~140 MB and dominates
+          # the zip size — Mesa uses it for shader codegen).  The
+          # libLLVM-NN.dll soname bumps with each MSYS2 LLVM upgrade,
+          # so glob it instead of hard-coding the version.
+          cp /clangarm64/bin/opengl32.dll        dist/arm64/
+          cp /clangarm64/bin/libgallium_wgl.dll  dist/arm64/
+          cp /clangarm64/bin/libc++.dll          dist/arm64/
+          cp /clangarm64/bin/libffi-*.dll        dist/arm64/
+          cp /clangarm64/bin/libiconv-*.dll      dist/arm64/
+          cp /clangarm64/bin/libintl-*.dll       dist/arm64/
+          cp /clangarm64/bin/libLLVM-*.dll       dist/arm64/
+          cp /clangarm64/bin/libSPIRV-Tools.dll  dist/arm64/
+          cp /clangarm64/bin/libsystre-*.dll     dist/arm64/
+          cp /clangarm64/bin/libtre-*.dll        dist/arm64/
+          cp /clangarm64/bin/libxml2-*.dll       dist/arm64/
+          cp /clangarm64/bin/libzstd.dll         dist/arm64/
+          ls -laR dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dom6_arm64-windows
+          path: dist/
+          if-no-files-found: error

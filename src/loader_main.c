@@ -52,6 +52,8 @@ int main(int argc, char **argv) {
     setvbuf(stderr, NULL, _IONBF, 0);
     atexit(loader_atexit_marker);
 #endif
+    /* OS-specific early setup (Win: DLL search path + GALLIUM_DRIVER). */
+    os_early_init();
     install_crash_handler();
     install_shim_dump_handler();
     /* macOS ignores SIGPIPE on sockets by default; Linux terminates.
@@ -130,7 +132,14 @@ int main(int argc, char **argv) {
     /* chdir to <dirname(mac_path)>/MacOS (virtual app-bundle subdir) so the
      * binary's hardcoded "../data/<file>" paths resolve to <dirname>/data/. */
     {
+#ifdef _WIN32
+        /* _fullpath returns backslashes; pick whichever separator wins. */
+        const char *fwd = strrchr(abs_mac_path, '/');
+        const char *bwd = strrchr(abs_mac_path, '\\');
+        const char *slash = (fwd > bwd) ? fwd : bwd;
+#else
         const char *slash = strrchr(abs_mac_path, '/');
+#endif
         if (slash && slash > abs_mac_path) {
             char bundle_dir[4096];
             snprintf(bundle_dir, sizeof(bundle_dir),

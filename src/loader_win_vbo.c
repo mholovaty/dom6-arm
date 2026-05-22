@@ -1,25 +1,30 @@
 /* loader_win_vbo.c — software ARB_vertex_buffer_object for Win.
  *
- * Windows' opengl32.dll exports only OpenGL 1.1 statically; anything
- * beyond (including the VBO functions glBindBufferARB et al.) is only
- * reachable via wglGetProcAddress on a current GL context.  The
- * loader resolves GL symbols at startup via GetProcAddress, before
- * any context exists, so those 4 slots come back NULL.
+ * Two-stage operation:
  *
- * This file implements the 4 VBO functions in software (Gen/Bind/
- * BufferData/Delete, backing each ID with a heap buffer) and
- * intercepts glVertexPointer/ColorPointer/TexCoordPointer/DrawElements
- * to translate "offset into VBO" arguments back to CPU pointers when
- * a VBO is bound — the rest of the draw goes through opengl32.dll's
- * 1.1 client-side-arrays path, which works.
+ *   1. STARTUP — install_win_vbo() runs immediately after
+ *      install_gl_redirect(), BEFORE any GL context exists.
+ *      install_gl_redirect's flat GetProcAddress can't see VBO symbols
+ *      (Mesa, like stock Win opengl32, exports them only via
+ *      wglGetProcAddress which requires a current context), so the
+ *      4 ARB slots come back NULL.  We patch in software-emulator
+ *      replacements + offset-translation hooks for glVertexPointer
+ *      etc. so the slots aren't traps.
  *
- * Wired up by install_win_vbo(), called from loader_main.c right
- * after install_gl_redirect() so the host glVertexPointer etc.
- * pointers are captured before the slots get overwritten.
+ *   2. POST-CONTEXT — on the first vbo_glGenBuffersARB call, dom6 has
+ *      created an SDL GL context, which means wglGetProcAddress now
+ *      works.  We resolve the real Mesa-provided ARB functions, write
+ *      them straight into the GOT (and restore the un-translated
+ *      glVertexPointer / glDrawElements etc.), and drop ourselves out
+ *      of the call path entirely.  All subsequent draws hit Mesa
+ *      directly — no per-frame CPU upload of "client side arrays" —
+ *      which is the actual fix.  The Adreno GPU hang we hit otherwise
+ *      seems related to the per-frame stream-upload pattern Mesa is
+ *      forced into when there are no real VBOs.
  *
- * Future cleanup: defer GL symbol resolution to post-SDL_GL_CreateContext
- * and use wglGetProcAddress for the missed ARB slots — that would make
- * this file unnecessary.
+ * Falls back to the software emulator if wglGetProcAddress can't find
+ * the ARB functions (e.g. context not current yet).  In practice the
+ * fallback never fires under Mesa.
  *
  * Win-only.  Compiled out on POSIX (libGL has real VBOs). */
 
@@ -29,6 +34,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <windows.h>
 
 /* GL constants we need — avoid pulling in a full GL header to keep the
  * file independent of toolchain GL headers. */
@@ -57,7 +63,12 @@ typedef ptrdiff_t     GLsizeiptr;
 
 /* ── State ────────────────────────────────────────────────────────── */
 
-#define MAX_VBO  1024
+/* dom6 main-menu UI burns through >1024 buffers (text glyphs, sprite
+ * batches, UI quads).  Bump the pool generously — entries are 24B each,
+ * so 64K slots cost ~1.5 MB of zeroed BSS.  Real fix is to call the
+ * host VBO functions directly via wglGetProcAddress after the GL
+ * context exists, instead of emulating them. */
+#define MAX_VBO  65536
 
 struct win_vbo {
     void  *data;
@@ -79,12 +90,73 @@ static void (*real_glNormalPointer)(GLenum, GLsizei, const void*);
 static void (*real_glTexCoordPointer)(GLint, GLenum, GLsizei, const void*);
 static void (*real_glDrawElements)(GLenum, GLsizei, GLenum, const void*);
 
-/* ── Fake VBO API ────────────────────────────────────────────────── */
+/* ── Try to escape the emulator: bind GOT slots straight to Mesa ── */
 
 #define TRACE(...) do { if (getenv("DOM6_VBO_TRACE")) \
     fprintf(stderr, __VA_ARGS__); } while (0)
 
+/* Cached wglGetProcAddress, populated at install_win_vbo time. */
+typedef PROC (WINAPI *wgl_get_proc_t)(LPCSTR);
+static wgl_get_proc_t s_wgl_get_proc;
+/* 0 = not yet attempted, 1 = succeeded (emulator off), -1 = gave up. */
+static int s_real_arb_state;
+
+/* Resolve Mesa's real glGenBuffers/Bind/BufferData/Delete via the now-
+ * current GL context and hot-patch the Mac GOT slots to point at them.
+ * Also restores the un-hooked glVertexPointer / glColorPointer /
+ * glTexCoordPointer / glDrawElements pointers — once Mesa owns VBO
+ * state itself, our offset-translation wrappers are wrong and harmful. */
+static int try_promote_to_real_vbo(void) {
+    if (s_real_arb_state != 0) return s_real_arb_state == 1;
+    if (!s_wgl_get_proc) { s_real_arb_state = -1; return 0; }
+
+    /* Try ARB names first (older Mesa), fall back to core names. */
+    void *g  = (void *)s_wgl_get_proc("glGenBuffersARB");
+    void *b  = (void *)s_wgl_get_proc("glBindBufferARB");
+    void *d  = (void *)s_wgl_get_proc("glBufferDataARB");
+    void *de = (void *)s_wgl_get_proc("glDeleteBuffersARB");
+    if (!g || !b || !d || !de) {
+        g  = (void *)s_wgl_get_proc("glGenBuffers");
+        b  = (void *)s_wgl_get_proc("glBindBuffer");
+        d  = (void *)s_wgl_get_proc("glBufferData");
+        de = (void *)s_wgl_get_proc("glDeleteBuffers");
+    }
+    if (!g || !b || !d || !de) {
+        /* No GL context current yet, or Mesa really doesn't have them.
+         * Stay on the emulator but allow another retry on the next call —
+         * dom6 may legitimately call glGenBuffers before make-current
+         * on the first frame.  We only give up after a budget. */
+        static int retries;
+        if (++retries > 16) { s_real_arb_state = -1; }
+        return 0;
+    }
+
+    *SLOT_glGenBuffersARB    = (uint64_t)g;
+    *SLOT_glBindBufferARB    = (uint64_t)b;
+    *SLOT_glBufferDataARB    = (uint64_t)d;
+    *SLOT_glDeleteBuffersARB = (uint64_t)de;
+
+    /* Restore un-hooked vertex/element pointers — Mesa needs the raw
+     * offset args from dom6, not the CPU pointers we'd translate to. */
+    *SLOT_glVertexPointer    = (uint64_t)real_glVertexPointer;
+    *SLOT_glColorPointer     = (uint64_t)real_glColorPointer;
+    *SLOT_glTexCoordPointer  = (uint64_t)real_glTexCoordPointer;
+    *SLOT_glDrawElements     = (uint64_t)real_glDrawElements;
+
+    s_real_arb_state = 1;
+    fprintf(stderr,
+            "[win-vbo] real Mesa VBO functions resolved post-context; "
+            "emulator disabled, GOT now bound straight to Mesa\n");
+    return 1;
+}
+
+/* ── Fake VBO API (fallback when Mesa VBO lookup hasn't succeeded) ── */
+
 static void vbo_glGenBuffersARB(GLsizei n, GLuint *ids) {
+    if (try_promote_to_real_vbo()) {
+        ((void (*)(GLsizei, GLuint *))*SLOT_glGenBuffersARB)(n, ids);
+        return;
+    }
     for (GLsizei i = 0; i < n; i++) {
         GLuint id = 0;
         /* Scan from hint forward, wrap to 1 if needed.  Slot 0 reserved. */
@@ -206,12 +278,23 @@ static void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type,
 
 void install_win_vbo(void) {
     /* Capture the real (host) function pointers before we overwrite the
-     * slots with our hooks, so the hooks can forward correctly.  The
-     * slots are populated by install_gl_redirect() in loader_sdl_gl.c. */
+     * slots with our hooks, so the hooks can forward correctly AND so
+     * try_promote_to_real_vbo can restore the un-hooked versions once
+     * Mesa's real VBOs take over.  Slots populated by
+     * install_gl_redirect() in loader_sdl_gl.c. */
     real_glVertexPointer   = (void *)*SLOT_glVertexPointer;
     real_glColorPointer    = (void *)*SLOT_glColorPointer;
     real_glTexCoordPointer = (void *)*SLOT_glTexCoordPointer;
     real_glDrawElements    = (void *)*SLOT_glDrawElements;
+
+    /* Cache wglGetProcAddress for post-context VBO resolution.  Pulled
+     * from Mesa's opengl32.dll (already loaded by install_gl_redirect).
+     * NULL if for some reason opengl32 didn't load — we'll stay on the
+     * software emulator forever. */
+    HMODULE opengl32 = GetModuleHandleA("opengl32.dll");
+    if (opengl32) {
+        s_wgl_get_proc = (wgl_get_proc_t)GetProcAddress(opengl32, "wglGetProcAddress");
+    }
 
     /* glNormalPointer isn't in the dom6 GL slot table — skip its hook.
      * If dom6 ever calls it with a VBO bound the offset would leak
@@ -229,8 +312,9 @@ void install_win_vbo(void) {
     *SLOT_glDrawElements     = (uint64_t)(void *)hook_glDrawElements;
 
     fprintf(stderr,
-            "[win-vbo] installed: ARB_vertex_buffer_object emulation "
-            "via client-side arrays\n");
+            "[win-vbo] installed: VBO emulator armed, will try to hand "
+            "control to Mesa on first glGenBuffers (wgl=%s)\n",
+            s_wgl_get_proc ? "ok" : "missing");
 }
 
 #else  /* !_WIN32 */

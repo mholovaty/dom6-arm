@@ -174,9 +174,45 @@ static const char *win_lib_name(const char *posix_soname) {
 
 static __thread char tls_lib_err[256];
 
+/* Cached <exe-dir> — captured once via GetModuleFileNameA so subsequent
+ * chdir() calls (e.g. into the virtual MacOS bundle dir) don't move it. */
+static const char *exe_dir(void) {
+    static char dir[MAX_PATH] = {0};
+    if (dir[0]) return dir;
+    DWORD n = GetModuleFileNameA(NULL, dir, sizeof dir);
+    if (n == 0 || n >= sizeof dir) { dir[0] = '.'; dir[1] = '\0'; return dir; }
+    char *slash = strrchr(dir, '\\');
+    if (slash) *slash = '\0';
+    return dir;
+}
+
 os_lib_t os_lib_open(const char *posix_soname) {
     const char *win_name = win_lib_name(posix_soname);
-    HMODULE h = LoadLibraryA(win_name);
+
+    /* Look in <exe-dir>\arm64\ first so a DLL bundled with our artifact
+     * wins over a same-named DLL in the install-dir root (which is likely
+     * the x86_64 game's incompatible copy — LoadLibraryA on that returns
+     * ERROR_BAD_EXE_FORMAT/193).  Use an absolute path: a relative path
+     * with separators is resolved against CWD, and main() chdir()s into
+     * the virtual MacOS bundle dir before any os_lib_open() call. */
+    HMODULE h = NULL;
+    char private_path[MAX_PATH];
+    int n = snprintf(private_path, sizeof private_path,
+                     "%s\\arm64\\%s", exe_dir(), win_name);
+    if (n > 0 && (size_t)n < sizeof private_path) {
+        /* LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR: add arm64\ to the search
+         * path for THIS DLL's transitive deps too — critical for Mesa,
+         * which dynamically LoadLibrary()s its own sibling DLLs from
+         * inside opengl32.dll and would otherwise fail to find them. */
+        h = LoadLibraryExA(private_path, NULL,
+                           LOAD_LIBRARY_SEARCH_DEFAULT_DIRS |
+                           LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
+    }
+
+    /* Fall back to the standard DLL search order (System32 etc.) for
+     * libs we don't bundle, like opengl32.dll. */
+    if (!h) h = LoadLibraryA(win_name);
+
     if (!h) {
         DWORD err = GetLastError();
         snprintf(tls_lib_err, sizeof tls_lib_err,
@@ -185,6 +221,13 @@ os_lib_t os_lib_open(const char *posix_soname) {
         return NULL;
     }
     tls_lib_err[0] = '\0';
+    /* DEBUG: report which DLL actually got bound. */
+    {
+        char actual[MAX_PATH];
+        DWORD m = GetModuleFileNameA(h, actual, sizeof actual);
+        fprintf(stderr, "[dll] %s -> %s\n", win_name,
+                (m > 0 && m < sizeof actual) ? actual : "<unknown>");
+    }
     return (os_lib_t)h;
 }
 
@@ -333,4 +376,47 @@ void os_print_memory_map(uint64_t pc, uint64_t lr) {
 void os_ignore_broken_pipe(void) {
     /* Win32 sockets return WSAECONNRESET instead of raising a signal —
      * there's nothing to suppress.  No-op. */
+}
+
+void os_early_init(void) {
+    /* Narrow the default DLL search path so our bundled DLLs in
+     * <exe-dir>\arm64 beat any same-named DLLs sitting next to the exe
+     * (e.g. Steam's x86_64 sdl2.dll / zlib1.dll).  USER_DIRS picks up
+     * the AddDllDirectory entry below; SYSTEM32 covers OS libraries
+     * (kernel32, ws2_32, opengl32 fallback, …).  APPLICATION_DIR is
+     * intentionally excluded. */
+    SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_USER_DIRS |
+                             LOAD_LIBRARY_SEARCH_SYSTEM32);
+
+    /* Register <exe-dir>\arm64 as a user search dir.  Wide-char API
+     * because AddDllDirectory takes PCWSTR — no ANSI variant exists. */
+    wchar_t arm64_dir[MAX_PATH];
+    DWORD n = GetModuleFileNameW(NULL, arm64_dir, MAX_PATH);
+    if (n > 0 && n < MAX_PATH) {
+        wchar_t *slash = wcsrchr(arm64_dir, L'\\');
+        if (slash) {
+            *slash = L'\0';
+            /* Bail if the result wouldn't fit \arm64 + NUL. */
+            if (wcslen(arm64_dir) + 7 < MAX_PATH) {
+                wcscat(arm64_dir, L"\\arm64");
+                AddDllDirectory(arm64_dir);
+                /* Also set the legacy DLL search dir — some loader
+                 * paths (notably Mesa's internal driver probe via
+                 * LoadLibrary without explicit flags) bypass the
+                 * AddDllDirectory + SetDefaultDllDirectories combo
+                 * and only honour SetDllDirectory. */
+                SetDllDirectoryW(arm64_dir);
+            }
+        }
+    }
+
+    /* Default Mesa's gallium driver selection to zink (GL→Vulkan→GPU).
+     * The Win-on-ARM system opengl32 is GDI-generic software GL 1.1 and
+     * can't handle dom6's GL 1.2+ pixel formats; our bundled Mesa
+     * opengl32.dll in arm64\ delegates here.  Microsoft's opengl32
+     * ignores the variable, so setting it unconditionally is safe.
+     * Respect a caller-provided override. */
+    if (!getenv("GALLIUM_DRIVER")) {
+        _putenv_s("GALLIUM_DRIVER", "zink");
+    }
 }
