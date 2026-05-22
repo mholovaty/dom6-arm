@@ -54,6 +54,17 @@ int main(int argc, char **argv) {
 #endif
     /* OS-specific early setup (Win: DLL search path + GALLIUM_DRIVER). */
     os_early_init();
+
+    /* Identify which Dominions 6 binary this build was compiled against
+     * (data/<DOM6_VERSION>/*.inc).  If the user's installed dom6_mac is
+     * a different upstream version the GOT layout won't match and things
+     * fail in confusing ways — having the version in every log makes
+     * that mismatch obvious. */
+#ifdef DOM6_VERSION_STR
+    fprintf(stderr, "[dom6-loader] built for Dominions 6 v%s\n",
+            DOM6_VERSION_STR);
+#endif
+
     install_crash_handler();
     install_shim_dump_handler();
     /* macOS ignores SIGPIPE on sockets by default; Linux terminates.
