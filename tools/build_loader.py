@@ -116,9 +116,18 @@ LIBC_DIRECT = {
     '_pthread_setspecific','_pthread_sigmask',
     # ctype
     '_toupper',
-    # OpenGL/GLU — slots filled at runtime via install_gl_redirect (in
-    # src/loader_sdl_gl.c); we still classify them here so fill_got
-    # writes the initial pointer (nop), then install_gl_redirect overrides.
+}
+
+# OpenGL/GLU — every gl* / glu* slot is filled at runtime by
+# install_gl_redirect (src/loader_sdl_gl.c), which dlopens libGL.so.1 /
+# opengl32.dll and overwrites the GOT entries with the host pointers.
+# We classify these as nop_func bindings (kind='special', val='mac_nop_func')
+# specifically so that fill_got does NOT take their addresses by name —
+# otherwise the PE linker resolves them statically against opengl32.dll
+# at process startup, before main() runs, which would bind the binary to
+# the stock Win-on-ARM GDI software GL 1.1 and prevent our bundled Mesa
+# zink build from taking over.
+GL_NOP_SYMBOLS = {
     '_glAlphaFunc','_glBegin','_glBindTexture','_glBlendFunc','_glCallList',
     '_glClear','_glClearColor','_glColor3f','_glColor3fv','_glColor3ub',
     '_glColor4f','_glColorMaterial','_glColorPointer',
@@ -289,6 +298,12 @@ def classify_symbol(name):
     """
     if name in SPECIAL_SLOTS:
         return ('special', SPECIAL_SLOTS[name])
+    if name in GL_NOP_SYMBOLS:
+        # See GL_NOP_SYMBOLS docstring: bind to mac_nop_func so the
+        # PE / ELF linker never resolves the real opengl32 / libGL
+        # symbol statically.  install_gl_redirect() rewrites these
+        # slots at startup with dlsym'd pointers from the host's GL.
+        return ('special', 'mac_nop_func')
     if name in LIBC_DIRECT:
         linux_name = LIBC_RENAME.get(name, name.lstrip('_'))
         return ('libc', linux_name)

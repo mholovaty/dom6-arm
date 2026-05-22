@@ -26,12 +26,22 @@ STATIC      ?=
 # ── Per-OS link libraries ────────────────────────────────────────────
 LOADER_OS   ?= posix
 ifeq ($(LOADER_OS),posix)
-  DYN_LIBS  := -lm -ldl -lGL -lGLU
+  # SDL2 + libGL + libGLU are dlopened at runtime by install_sdl_redirect
+  # / install_gl_redirect — intentionally NOT in LDLIBS.  See the win32
+  # block below for why static-linking opengl32 would break the Mesa
+  # zink override on Windows; on Linux it's a symmetry/portability win
+  # (binary runs on any glibc with libGL.so.1 present, no -dev pkgs).
+  DYN_LIBS  := -lm -ldl
   STA_LIBS  := -lz -lbz2 -lpthread
 endif
 ifeq ($(LOADER_OS),win32)
-  # SDL2 is dlopened at runtime — intentionally not in LDLIBS.
-  DYN_LIBS  := -lopengl32 -lglu32 -lpsapi -lws2_32 -lbcrypt
+  # SDL2 + opengl32 + glu32 are all dlopened at runtime — intentionally
+  # NOT in LDLIBS.  Static-importing opengl32 would force the PE loader
+  # to resolve it at process start, before main() can narrow the DLL
+  # search to <exe-dir>\arm64.  That binds the early opengl32 import
+  # to Microsoft's GDI software GL 1.1 and prevents our bundled Mesa
+  # from taking over later.
+  DYN_LIBS  := -lpsapi -lws2_32 -lbcrypt
   STA_LIBS  := -lz -lbz2 -lpthread
   ifeq ($(STATIC),1)
     LDFLAGS += -static-libgcc
