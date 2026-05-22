@@ -42,15 +42,20 @@ jobs:
       - name: make build
         run: make build
 
-      - name: Show artifact
+      - name: Stage runtime distribution
+        # DOM6_VERSION.txt sits next to the binary so users can confirm
+        # which upstream Dominions 6 release the loader expects.
         run: |
-          file build/loader/dom6_aarch64
-          ls -la build/loader/dom6_aarch64
+          mkdir -p dist
+          cp build/loader/dom6_aarch64       dist/
+          cp build/loader/DOM6_VERSION.txt   dist/
+          file dist/dom6_aarch64
+          ls -la dist/
 
       - uses: actions/upload-artifact@v4
         with:
           name: dom6_aarch64-linux
-          path: build/loader/dom6_aarch64
+          path: dist/
           if-no-files-found: error
 
   windows-arm64:
@@ -95,7 +100,8 @@ jobs:
         # dom6 (needs GL 1.2+ packed pixel formats for textures).
         run: |
           mkdir -p dist/arm64
-          cp build/loader/dom6_arm64.exe dist/
+          cp build/loader/dom6_arm64.exe   dist/
+          cp build/loader/DOM6_VERSION.txt dist/
           # SDL2 + zlib (the latter is a Mesa transitive dep).
           cp /clangarm64/bin/SDL2.dll  dist/arm64/
           cp /clangarm64/bin/zlib1.dll dist/arm64/
