@@ -975,6 +975,35 @@ static int win_sa_to_mac(const struct sockaddr_storage *win, int /*win_len*/ wl,
 #define WSTRACE(...) do { if (getenv("DOM6_LOADER_TRACE")) \
     fprintf(stderr, __VA_ARGS__); } while (0)
 
+/* Winsock reports failures via WSAGetLastError(), but dom6_mac is a macOS
+ * binary that reads errno (through __error → &errno) and compares it to *macOS*
+ * errno numbers.  Translate the last Winsock error to the macOS value and store
+ * it in errno.  Critical for non-blocking connect: dom6 has no select/poll/
+ * getsockopt and detects connect completion purely via errno
+ * (EINPROGRESS=36 → EISCONN=56) — without this it hangs at "Connecting to
+ * server".  `connecting` makes WSAEWOULDBLOCK mean EINPROGRESS (connect) vs
+ * EAGAIN (recv/send). */
+static void mac_set_errno_from_wsa(int connecting) {
+    switch (WSAGetLastError()) {
+        case 0:                errno = 0;                       break;
+        case WSAEWOULDBLOCK:   errno = connecting ? 36 : 35;    break; /* EINPROGRESS : EAGAIN */
+        case WSAEINPROGRESS:   errno = 36;                      break; /* EINPROGRESS */
+        case WSAEALREADY:      errno = 37;                      break; /* EALREADY    */
+        case WSAEISCONN:       errno = 56;                      break; /* EISCONN     */
+        case WSAENOTCONN:      errno = 57;                      break; /* ENOTCONN    */
+        case WSAECONNREFUSED:  errno = 61;                      break; /* ECONNREFUSED*/
+        case WSAECONNRESET:    errno = 54;                      break; /* ECONNRESET  */
+        case WSAECONNABORTED:  errno = 53;                      break; /* ECONNABORTED*/
+        case WSAETIMEDOUT:     errno = 60;                      break; /* ETIMEDOUT   */
+        case WSAEADDRINUSE:    errno = 48;                      break; /* EADDRINUSE  */
+        case WSAEADDRNOTAVAIL: errno = 49;                      break; /* EADDRNOTAVAIL*/
+        case WSAENETUNREACH:   errno = 51;                      break; /* ENETUNREACH */
+        case WSAEHOSTUNREACH:  errno = 65;                      break; /* EHOSTUNREACH*/
+        case WSAENOTSOCK:      errno = 38;                      break; /* ENOTSOCK    */
+        default:               errno = 5;                       break; /* EIO         */
+    }
+}
+
 static int mac_socket(int d, int t, int p) {
     SHIM_HIT(SHIM__socket);
     SOCKET s = socket(mac_af_to_win(d), t, p);
@@ -990,6 +1019,7 @@ static int mac_bind(int f, const void *a, int l) {
     int wl = mac_sa_to_win(a, l, &ws);
     if (wl < 0) { WSASetLastError(WSAEAFNOSUPPORT); return -1; }
     int r = bind((SOCKET)f, (struct sockaddr*)&ws, wl);
+    if (r) mac_set_errno_from_wsa(0);
     WSTRACE("[shim] mac_bind(fd=%d, len=%d) = %d  err=%d\n",
             f, wl, r, r ? WSAGetLastError() : 0);
     return r;
@@ -1000,8 +1030,9 @@ static int mac_connect(int f, const void *a, int l) {
     int wl = mac_sa_to_win(a, l, &ws);
     if (wl < 0) { WSASetLastError(WSAEAFNOSUPPORT); return -1; }
     int r = connect((SOCKET)f, (struct sockaddr*)&ws, wl);
-    WSTRACE("[shim] mac_connect(fd=%d) = %d  err=%d\n",
-            f, r, r ? WSAGetLastError() : 0);
+    if (r) mac_set_errno_from_wsa(1);   /* connecting: WSAEWOULDBLOCK → EINPROGRESS(36) */
+    WSTRACE("[shim] mac_connect(fd=%d) = %d  wsa=%d errno=%d\n",
+            f, r, r ? WSAGetLastError() : 0, errno);
     return r;
 }
 static int mac_accept(int f, void *a, int *l) {
@@ -1010,6 +1041,7 @@ static int mac_accept(int f, void *a, int *l) {
     int wl = (int)sizeof(ws);
     SOCKET s = accept((SOCKET)f, (struct sockaddr*)&ws, &wl);
     if (s == INVALID_SOCKET) {
+        mac_set_errno_from_wsa(0);   /* WSAEWOULDBLOCK → EAGAIN(35) */
         WSTRACE("[shim] mac_accept(fd=%d) = -1  err=%d\n", f, WSAGetLastError());
         return -1;
     }
@@ -1046,6 +1078,7 @@ static long mac_recv(int f, void *b, unsigned n, int g) {
     SHIM_HIT(SHIM__recv);
     int win_g = mac_msg_to_win(g);
     long r = recv((SOCKET)f, (char*)b, (int)n, win_g);
+    if (r < 0) mac_set_errno_from_wsa(0);   /* WSAEWOULDBLOCK → EAGAIN(35) */
     WSTRACE("[shim] mac_recv(fd=%d, n=%u, mac_flags=0x%x→win=0x%x) = %ld  err=%d\n",
             f, n, g, win_g, r, r < 0 ? WSAGetLastError() : 0);
     return r;
@@ -1054,6 +1087,7 @@ static long mac_send(int f, const void *b, unsigned n, int g) {
     SHIM_HIT(SHIM__send);
     int win_g = mac_msg_to_win(g);
     long r = send((SOCKET)f, (const char*)b, (int)n, win_g);
+    if (r < 0) mac_set_errno_from_wsa(0);   /* WSAEWOULDBLOCK → EAGAIN(35) */
     WSTRACE("[shim] mac_send(fd=%d, n=%u, mac_flags=0x%x→win=0x%x) = %ld  err=%d\n",
             f, n, g, win_g, r, r < 0 ? WSAGetLastError() : 0);
     return r;
