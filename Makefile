@@ -61,6 +61,10 @@ endif
 DOM6_VERSION ?= 6.35
 SRC_DIR      := src
 DATA_DIR     := data/$(DOM6_VERSION)
+
+# Surface the upstream Dominions 6 version inside the loader so users
+# (and bug reports) can confirm which game version a given build targets.
+CFLAGS      += -DDOM6_VERSION_STR=\"$(DOM6_VERSION)\"
 BUILD_DIR    := build/loader
 ifeq ($(LOADER_OS),win32)
 LOADER_BIN   := $(BUILD_DIR)/dom6_arm64.exe
@@ -96,11 +100,17 @@ help:
 	@echo "Pick a different game version: make DOM6_VERSION=6.36"
 	@echo "Static-link zlib/bzip2/pthread:make STATIC=1"
 
-build: $(LOADER_BIN)
+build: $(LOADER_BIN) $(BUILD_DIR)/DOM6_VERSION.txt
 
 $(LOADER_BIN): $(LOADER_SRC) | $(BUILD_DIR) data-check
 	$(CC) $(CFLAGS) -I$(SRC_DIR) -I$(DATA_DIR) \
 	    -o $@ $(LOADER_SRC) $(LDFLAGS) $(LDLIBS)
+
+# Surfaces the upstream Dominions 6 version this build targets — shipped
+# next to the binary in CI artifacts so users can confirm at a glance
+# which dom6_mac their downloaded loader matches.
+$(BUILD_DIR)/DOM6_VERSION.txt: Makefile | $(BUILD_DIR)
+	@echo "$(DOM6_VERSION)" > $@
 
 .PHONY: data-check
 data-check:
