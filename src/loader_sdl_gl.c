@@ -16,6 +16,8 @@
  */
 #include "loader_common.h"
 #include "loader_os.h"
+#include "loader_altenter.h"
+#include <string.h>
 
 #define SDL_JUMP_TABLE_VA  0x100ae5e58UL
 #define SDL_SLOT_COUNT     836
@@ -69,6 +71,17 @@ static void *sdl_install_trap(uint16_t slot) {
     sdl_trap_count++;
     return (void*)code;
 }
+
+#ifdef _WIN32
+/* Wrap SDL_CreateWindow so the Alt+Enter fix can capture dom6's window (it
+ * needs the HWND + windowID).  See loader_altenter.h. */
+static void *(*real_SDL_CreateWindow)(const char *, int, int, int, int, unsigned);
+static void *altenter_SDL_CreateWindow(const char *t, int x, int y, int w, int h, unsigned f) {
+    void *win = real_SDL_CreateWindow(t, x, y, w, h, f);
+    altenter_fix_on_window(win);
+    return win;
+}
+#endif
 
 /* ── public: install SDL redirect.  Called from loader_main.c ───── */
 void install_sdl_redirect(void) {
@@ -124,6 +137,19 @@ void install_sdl_redirect(void) {
     jt[11]  = (uint64_t)mac_sdl_create_thread_stub;
     jt[645] = (uint64_t)mac_sdl_create_thread_ws_stub;
     fprintf(stderr, "[loader] sdl: SDL_CreateThread + SDL_CreateThreadWithStackSize stubbed\n");
+
+    /* Alt+Enter fullscreen fix (DXGI exclusive-fullscreen hijack).  Resolve the
+     * SDL entry points it needs, and wrap SDL_CreateWindow so it can arm itself
+     * on dom6's window.  Self-contained; see loader_altenter.{h,c}. */
+    altenter_fix_init(h);
+    for (size_t i = 0; i < SDL_REDIRECT_COUNT; i++) {
+        if (sdl_redirects[i].name && !strcmp(sdl_redirects[i].name, "SDL_CreateWindow")) {
+            uint16_t slot = sdl_redirects[i].slot;
+            *(void **)&real_SDL_CreateWindow = (void *)jt[slot];
+            jt[slot] = (uint64_t)altenter_SDL_CreateWindow;
+            break;
+        }
+    }
 #endif
 }
 

@@ -80,6 +80,7 @@ COMMON_SRC  := $(SRC_DIR)/loader_main.c       \
                $(SRC_DIR)/loader_counters.c   \
                $(SRC_DIR)/loader_crash.c      \
                $(SRC_DIR)/loader_sdl_gl.c     \
+               $(SRC_DIR)/loader_altenter_win.c \
                $(SRC_DIR)/loader_win_vbo.c
 
 OS_SRC      := $(SRC_DIR)/loader_os_$(LOADER_OS).c
