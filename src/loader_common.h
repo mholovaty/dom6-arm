@@ -10,7 +10,8 @@
  *
  * Per-OS abstractions live in loader_os.h.
  */
-#pragma once
+#ifndef LOADER_COMMON_H
+#define LOADER_COMMON_H
 
 /* sincos(), strlcpy(), atomic intrinsics, MAP_ANONYMOUS etc. are glibc
  * extensions enabled by _GNU_SOURCE.  Must be set before any libc include.
@@ -82,3 +83,5 @@ extern FILE *mac_stdin_val;
 extern FILE **mac_stderrp_ptr;
 extern FILE **mac_stdoutp_ptr;
 extern FILE **mac_stdinp_ptr;
+
+#endif /* LOADER_COMMON_H */

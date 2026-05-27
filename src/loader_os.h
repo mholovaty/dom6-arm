@@ -16,7 +16,8 @@
  *   src/loader_os_posix.c   — Linux + (in principle) macOS, *BSD
  *   src/loader_os_win32.c   — Windows on ARM64 (MSYS2 clangarm64 / mingw-w64)
  */
-#pragma once
+#ifndef LOADER_OS_H
+#define LOADER_OS_H
 #include <stdint.h>
 #include <stddef.h>
 
@@ -126,3 +127,5 @@ void os_early_init(void);
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* LOADER_OS_H */
