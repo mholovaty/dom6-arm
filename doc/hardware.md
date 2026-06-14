@@ -9,32 +9,38 @@ ones.
 
 ### Windows ARM64
 
-| Machine        | ASUS Snapdragon X laptop |
-| SoC            | Qualcomm Snapdragon X (8-core Oryon) |
-| GPU            | Qualcomm Adreno X1-45 (`ACPI\VEN_QCOM&DEV_0D17`) |
-| OS             | Windows 11 24H2 (ARM64) |
-| Build env      | MSYS2 CLANGARM64, clang 21.x / 22.x, lld, mingw-w64-clang-aarch64-* |
-| Mesa runtime   | mingw-w64-clang-aarch64-mesa, latest (pacman -Syuu in CI) |
-| Adreno driver  | 31.0.148.0 (2026-03-18) — passing.  Earlier 31.0.96.0 (2025-02) sporadically hung; see [`snapdragon_adreno_drivers.md`](../snapdragon_adreno_drivers.md). |
-| Launch path    | Steam install dir; loader auto-detects `dom6_mac` next to `dom6_arm64.exe`. |
-| Vulkan loader  | System `vulkan-1.dll`; ICD discovery via `qcvk_icd_arm64x.json` in DriverStore. |
+|               |                                                                                                                                                           |
+|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Machine       | ASUS Snapdragon X laptop                                                                                                                                  |
+| SoC           | Qualcomm Snapdragon X (8-core Oryon)                                                                                                                      |
+| GPU           | Qualcomm Adreno X1-45 (`ACPI\VEN_QCOM&DEV_0D17`)                                                                                                          |
+| OS            | Windows 11 24H2 (ARM64)                                                                                                                                   |
+| Build env     | MSYS2 CLANGARM64, clang 21.x / 22.x, lld, mingw-w64-clang-aarch64-*                                                                                       |
+| Mesa runtime  | mingw-w64-clang-aarch64-mesa, latest (pacman -Syuu in CI)                                                                                                 |
+| Adreno driver | 31.0.148.0 (2026-03-18) — passing.  Earlier 31.0.96.0 (2025-02) sporadically hung; see [`snapdragon_adreno_drivers.md`](../snapdragon_adreno_drivers.md). |
+| Launch path   | Steam install dir; loader auto-detects `dom6_mac` next to `dom6_arm64.exe`.                                                                               |
+| Vulkan loader | System `vulkan-1.dll`; ICD discovery via `qcvk_icd_arm64x.json` in DriverStore.                                                                           |
 
 ### Linux ARM64
 
-| Machine        | Same ASUS Snapdragon X laptop, WSL2 |
-| Distro         | Ubuntu 24.04 LTS (ARM64) |
-| Build env      | gcc 13, make, libgl1-mesa-dev, libglu1-mesa-dev, libbz2-dev, zlib1g-dev |
-| Verification   | `make build` + headless smoke run (GLX context creation fails under WSL2 X server but loader otherwise initialises correctly: SDL 836/836, GL 73/73 redirects, dom6_mac mac_main entered). |
+|              |                                                                                                                                                                                            |
+|--------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Machine      | Same ASUS Snapdragon X laptop, WSL2                                                                                                                                                        |
+| Distro       | Ubuntu 24.04 LTS (ARM64)                                                                                                                                                                   |
+| Build env    | gcc 13, make, libgl1-mesa-dev, libglu1-mesa-dev, libbz2-dev, zlib1g-dev                                                                                                                    |
+| Verification | `make build` + headless smoke run (GLX context creation fails under WSL2 X server but loader otherwise initialises correctly: SDL 836/836, GL 73/73 redirects, dom6_mac mac_main entered). |
 
 ### Raspberry Pi 4 (via qemu-aarch64-static, server mode)
 
-| Machine        | Raspberry Pi 4 |
-| SoC            | BCM2711 (Cortex-A72, ARMv8.0-A — *below* the native ARMv8.2 floor) |
-| OS             | Raspberry Pi OS 64-bit |
-| Tooling        | `qemu-user-static` (`qemu-aarch64-static`) |
-| Verified       | Server mode only: `--tcpserver --textonly --nosound --nosteam`, Dom6 v6.35, 2026-06-03. |
-| Mechanism      | qemu's TCG lowers SDOT/UDOT and LSE atomics to ARMv8.0-only host sequences on the fly; no binary patching needed. Without qemu the binary SIGILLs natively on `sdot` |
-| Not verified   | GUI mode |
+|              |                                                                                                                                                                      |
+|--------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Machine      | Raspberry Pi 4                                                                                                                                                       |
+| SoC          | BCM2711 (Cortex-A72, ARMv8.0-A — *below* the native ARMv8.2 floor)                                                                                                   |
+| OS           | Raspberry Pi OS 64-bit                                                                                                                                               |
+| Tooling      | `qemu-user-static` (`qemu-aarch64-static`)                                                                                                                           |
+| Verified     | Server mode only: `--tcpserver --textonly --nosound --nosteam`, Dom6 v6.35, 2026-06-03.                                                                              |
+| Mechanism    | qemu's TCG lowers SDOT/UDOT and LSE atomics to ARMv8.0-only host sequences on the fly; no binary patching needed. Without qemu the binary SIGILLs natively on `sdot` |
+| Not verified | GUI mode                                                                                                                                                             |
 
 ## CI matrix
 
