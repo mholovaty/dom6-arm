@@ -88,9 +88,8 @@ performance penalty.
 directly, translating only the OS-boundary calls (libc, SDL, GL,
 sockets).  No emulation, no x86 in the loop.
 
-- **Linux ARM64** users (Raspberry Pi 5, Rockchip RK3588 SBCs like
-  Orange Pi 5, Apple Silicon under Asahi Linux, Ampere / AWS Graviton
-  servers, etc.) get a native build where there wasn't one.
+- **Linux ARM64** users (Raspberry Pi 5, Orange Pi 5, etc.) get a native
+build where there wasn't one.
 - **Windows ARM64** users (Snapdragon X / 8cx Gen 2+, etc.) get the
   same.
 - **One loader across OSes**, no separate ports to track and no
