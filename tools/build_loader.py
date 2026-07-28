@@ -76,8 +76,9 @@ LIBC_DIRECT = {
     # mac_open / mac_mkdir / mac_fopen (path-translation shim for Win
     # drop-in compat).  _fcntl uses mac_fcntl (O_NONBLOCK/O_APPEND
     # constants differ).
+    # _readdir routed via SPECIAL_SLOTS → mac_readdir (dirent layout differs).
     '_close','_closedir','_mmap','_mprotect','_munmap',
-    '_opendir','_pclose','_popen','_read','_readdir','_rewinddir',
+    '_opendir','_pclose','_popen','_read','_rewinddir',
     '_stat','_sysconf','_write',
     # POSIX network
     '_gethostbyname','_gethostname',
@@ -227,6 +228,13 @@ SPECIAL_SLOTS = {
     '_open':     'mac_open',
     '_fopen':    'mac_fopen',
     '_mkdir':    'mac_mkdir',
+    # readdir: Mac struct dirent has d_name @21 (it carries d_namlen); Linux
+    # d_name is @19.  A direct libc bind hands dom6 a Linux-layout dirent, but
+    # all 11 call sites read the name via `add x,x0,#0x15` (offset 21) — so
+    # every scanned filename loses its first 2 chars (ArenaDom6.map ->
+    # enaDom6.map), breaking --mapfile and mod directory lookup.  mac_readdir
+    # repacks the entry into the Mac dirent layout.
+    '_readdir':  'mac_readdir',
     # popen: dom6 shells out to `sysctl` for hw.ncpu and kern.osrelease.
     # cmd.exe has no `sysctl` — mac_popen recognises the exact commands
     # and returns canned values so dom6's OS-version parser doesn't fail.
