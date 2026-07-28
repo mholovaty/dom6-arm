@@ -1766,6 +1766,7 @@ static int mac_nanosleep(const struct mac_timespec_16 *mreq,
     return rc;
 }
 #define nanosleep        mac_nanosleep
+#endif  /* _WIN32 — the readdir shim below is needed on POSIX too */
 
 /* ── readdir struct-dirent shape mismatch ──────────────────────────
  *
@@ -1812,7 +1813,8 @@ static struct mac_dirent_1048 *mac_readdir(void *dirp) {
     mac_readdir_tls.d_type   = 0; /* DT_UNKNOWN — mingw lacks d_type */
     return &mac_readdir_tls;
 }
-#define readdir          mac_readdir
+
+#ifdef _WIN32   /* resume Win-only shim section */
 
 /* ── stat/fstat struct-stat shape mismatch ─────────────────────────
  *

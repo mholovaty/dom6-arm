@@ -1365,7 +1365,7 @@
     slot = (volatile uint64_t*)0x0000000100ae0d98UL;
     *slot = (uint64_t)(void*)read;  /* _read */
     slot = (volatile uint64_t*)0x0000000100ae0da0UL;
-    *slot = (uint64_t)(void*)readdir;  /* _readdir */
+    *slot = (uint64_t)(void*)mac_readdir;  /* _readdir */
     slot = (volatile uint64_t*)0x0000000100ae0da8UL;
     *slot = (uint64_t)(void*)realloc;  /* _realloc */
     slot = (volatile uint64_t*)0x0000000100ae0db0UL;
