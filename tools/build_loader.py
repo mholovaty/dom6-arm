@@ -63,7 +63,8 @@ LIBC_DIRECT = {
     '_strlcpy','_strlcat',
     # stdio (non-variadic / fixed-arg only)
     # _fopen routed via SPECIAL_SLOTS → mac_fopen.
-    '_fclose','_feof','_ferror','_fflush','_fgets','_fileno',
+    # _fclose routed via SPECIAL_SLOTS → mac_fclose (plugin close callback).
+    '_feof','_ferror','_fflush','_fgets','_fileno',
     '_fputc','_fputs','_fread','_fseek','_fseeko',
     '_fstat','_ftell','_ftello','_fwrite','_perror','_putchar',
     '_puts','_rewind','_setlinebuf',
@@ -227,6 +228,7 @@ SPECIAL_SLOTS = {
     # passthroughs — one extra function call per open() / fopen().
     '_open':     'mac_open',
     '_fopen':    'mac_fopen',
+    '_fclose':   'mac_fclose',
     '_mkdir':    'mac_mkdir',
     # readdir: Mac struct dirent has d_name @21 (it carries d_namlen); Linux
     # d_name is @19.  A direct libc bind hands dom6 a Linux-layout dirent, but
