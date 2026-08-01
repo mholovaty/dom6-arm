@@ -103,16 +103,20 @@ int main(int argc, char **argv) {
         snprintf(default_base, sizeof default_base, "%s\\Dominions6", appdata);
         const char *base = user_conf ? user_conf : default_base;
         CreateDirectoryA(base, NULL);                      /* OK if exists */
-        char sub[MAX_PATH];
-        snprintf(sub, sizeof sub, "%s\\savedgames", base);  CreateDirectoryA(sub, NULL);
-        snprintf(sub, sizeof sub, "%s\\maps",       base);  CreateDirectoryA(sub, NULL);
-        snprintf(sub, sizeof sub, "%s\\mods",       base);  CreateDirectoryA(sub, NULL);
+        /* Each of these names a directory outright — dom6 uses the value as-is rather than
+         * appending anything to it, so DOM6_SAVE must be the savedgames dir itself.  Pointing
+         * it at `base` created every game one level too high, beside dom6config, where the
+         * Steam build's game list does not look for them. */
+        char saves[MAX_PATH], maps[MAX_PATH], mods[MAX_PATH];
+        snprintf(saves, sizeof saves, "%s\\savedgames", base);  CreateDirectoryA(saves, NULL);
+        snprintf(maps,  sizeof maps,  "%s\\maps",       base);  CreateDirectoryA(maps,  NULL);
+        snprintf(mods,  sizeof mods,  "%s\\mods",       base);  CreateDirectoryA(mods,  NULL);
         fprintf(stderr, "[dom6-loader] conf dir: %s%s\n", base,
                 user_conf ? " (DOM6_CONF override)" : "");
         if (!user_conf) _putenv_s("DOM6_CONF", base);
-        if (!getenv("DOM6_SAVE"))      _putenv_s("DOM6_SAVE",      base);
-        if (!getenv("DOM6_LOCALMAPS")) _putenv_s("DOM6_LOCALMAPS", base);
-        if (!getenv("DOM6_MODS"))      _putenv_s("DOM6_MODS",      base);
+        if (!getenv("DOM6_SAVE"))      _putenv_s("DOM6_SAVE",      saves);
+        if (!getenv("DOM6_LOCALMAPS")) _putenv_s("DOM6_LOCALMAPS", maps);
+        if (!getenv("DOM6_MODS"))      _putenv_s("DOM6_MODS",      mods);
         if (!getenv("HOME"))           _putenv_s("HOME",           appdata);
         /* DOM6_DATA intentionally unset — let dom6 fall back to the
          * bundle's `data/` dir alongside the .exe.  Deployment requires
