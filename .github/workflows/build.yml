@@ -24,16 +24,13 @@ concurrency:
 
 jobs:
   linux-arm64:
-    # ONE ARTEFACT PER GAME VERSION. The loader's tables describe one upstream build and it
-    # refuses any other, so a single artefact built at the Makefile default silently expects
-    # whichever release that happens to be — and a player whose Steam copy has moved on gets a
-    # binary that will not run.
-    name: Linux ARM64 (${{ matrix.dom6_version }})
+    # ONE ARTEFACT PER GAME VERSION, built in ONE job. The loader's tables describe one
+    # upstream build and it refuses any other, so a single artefact built at the Makefile
+    # default silently expects whichever release that happens to be. A matrix is the obvious
+    # shape and the wrong one: it renames the job per leg, and `main`'s required status checks
+    # name these jobs exactly. So the versions are looped and the job keeps its name.
+    name: Linux ARM64
     runs-on: ubuntu-24.04-arm
-    strategy:
-      fail-fast: false
-      matrix:
-        dom6_version: ['6.35', '6.36']
     steps:
       - uses: actions/checkout@v7
 
@@ -47,32 +44,29 @@ jobs:
           packages: build-essential libgl1-mesa-dev libglu1-mesa-dev libbz2-dev zlib1g-dev
           version: 1.0  # bump to force a rebuild even when packages list is unchanged
 
-      - name: make build
-        run: make DOM6_VERSION=${{ matrix.dom6_version }} build
-
-      - name: Stage runtime distribution
-        # DOM6_VERSION.txt sits next to the binary so users can confirm
-        # which upstream Dominions 6 release the loader expects.
+      - name: make build (every version we carry tables for)
         run: |
-          mkdir -p dist
-          cp build/loader/dom6_aarch64       dist/
-          cp build/loader/DOM6_VERSION.txt   dist/
-          file dist/dom6_aarch64
-          ls -la dist/
+          for v in $(ls data); do
+            echo "::group::$v"
+            make DOM6_VERSION="$v" clean build
+            mkdir -p "dist/$v"
+            cp build/loader/dom6_aarch64     "dist/$v/"
+            cp build/loader/DOM6_VERSION.txt "dist/$v/"
+            echo "::endgroup::"
+          done
+
+      - name: Show what was staged
+        run: ls -laR dist/
 
       - uses: actions/upload-artifact@v7
         with:
-          name: dom6_aarch64-linux-${{ matrix.dom6_version }}
+          name: dom6_aarch64-linux
           path: dist/
           if-no-files-found: error
 
   windows-arm64:
-    name: Windows ARM64 (${{ matrix.dom6_version }})
+    name: Windows ARM64
     runs-on: windows-11-arm
-    strategy:
-      fail-fast: false
-      matrix:
-        dom6_version: ['6.35', '6.36']
     defaults:
       run:
         shell: msys2 {0}
@@ -97,8 +91,14 @@ jobs:
             mingw-w64-clang-aarch64-SDL2
             mingw-w64-clang-aarch64-mesa
 
-      - name: make LOADER_OS=win32 STATIC=1 build
-        run: make LOADER_OS=win32 CC=clang STATIC=1 DOM6_VERSION=${{ matrix.dom6_version }} build
+      - name: make LOADER_OS=win32 STATIC=1 build (every version)
+        run: |
+          for v in $(ls data); do
+            make LOADER_OS=win32 CC=clang STATIC=1 DOM6_VERSION="$v" clean build
+            mkdir -p "built/$v"
+            cp build/loader/dom6_arm64.exe   "built/$v/"
+            cp build/loader/DOM6_VERSION.txt "built/$v/"
+          done
 
       - name: Stage runtime distribution
         # STATIC=1 bakes zlib/bzip2/winpthread + the gcc runtime into the
@@ -112,8 +112,9 @@ jobs:
         # dom6 (needs GL 1.2+ packed pixel formats for textures).
         run: |
           mkdir -p dist/arm64
-          cp build/loader/dom6_arm64.exe   dist/
-          cp build/loader/DOM6_VERSION.txt dist/
+          # One exe per game version, each beside its own stamp; the DLLs below are shared by
+          # all of them and stay in arm64/ where the loader's search path expects them.
+          cp -r built/* dist/
           # SDL2 + zlib (the latter is a Mesa transitive dep).
           cp /clangarm64/bin/SDL2.dll  dist/arm64/
           cp /clangarm64/bin/zlib1.dll dist/arm64/
@@ -137,6 +138,6 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: dom6_arm64-windows-${{ matrix.dom6_version }}
+          name: dom6_arm64-windows
           path: dist/
           if-no-files-found: error
