@@ -84,6 +84,37 @@ static void *altenter_SDL_CreateWindow(const char *t, int x, int y, int w, int h
 }
 #endif
 
+/* ── SDL_Quit watchdog ───────────────────────────────────────────
+ *
+ * SDL_Quit shuts the audio subsystem down by JOINING SDL's audio thread, and the
+ * engine's exit path calls it.  An audio thread blocked in the host's backend —
+ * waiting on a sound server that has stopped servicing the stream — never
+ * reaches the shutdown flag, so the join does not return.  The process then
+ * stays alive with its window on screen after the player has quit: every thread
+ * parked, no CPU burned, nothing to do but kill it.
+ *
+ * A deadline here cannot lose anything.  This is the last thing the process
+ * does, and whatever the engine runs after SDL_Quit does not run either while
+ * the join is stuck.  When SDL_Quit returns the watchdog never fires and
+ * shutdown is untouched.
+ *
+ * DOM6_QUIT_TIMEOUT overrides the wait in seconds; 0 turns it off. */
+#define SDL_QUIT_TIMEOUT_DEFAULT 5
+
+static void (*real_SDL_Quit)(void);
+
+static void watchdog_SDL_Quit(void) {
+    const char *env  = getenv("DOM6_QUIT_TIMEOUT");
+    unsigned    secs = env ? (unsigned)strtoul(env, NULL, 10) : SDL_QUIT_TIMEOUT_DEFAULT;
+    os_watchdog_arm(secs,
+        "[dom6-loader] SDL_Quit has not returned: the host's audio shutdown is stuck.\n"
+        "[dom6-loader] Ending the process — the game has finished; nothing is lost.\n"
+        "[dom6-loader] Set DOM6_QUIT_TIMEOUT to change the wait, or 0 to wait for ever.\n");
+    real_SDL_Quit();
+    os_watchdog_disarm();
+}
+
+
 /* ── public: install SDL redirect.  Called from loader_main.c ───── */
 void install_sdl_redirect(void) {
     const char *libname = "libSDL2-2.0.so.0";
@@ -123,6 +154,18 @@ void install_sdl_redirect(void) {
     fprintf(stderr,
             "[loader] sdl: redirected %zu/%zu slots (variadic wrappers: %zu, traps: %zu)\n",
             redirected, (size_t)SDL_REDIRECT_COUNT, varargs_done, trapped);
+
+    /* Give SDL_Quit a deadline — see watchdog_SDL_Quit. */
+    for (size_t i = 0; i < SDL_REDIRECT_COUNT; i++) {
+        if (sdl_redirects[i].name && !strcmp(sdl_redirects[i].name, "SDL_Quit")) {
+            *(void **)&real_SDL_Quit = (void *)jt[sdl_redirects[i].slot];
+            jt[sdl_redirects[i].slot] = (uint64_t)watchdog_SDL_Quit;
+            const char *env = getenv("DOM6_QUIT_TIMEOUT");
+            fprintf(stderr, "[loader] sdl: SDL_Quit wrapped, exit watchdog %s\n",
+                    env ? (strtoul(env, NULL, 10) ? env : "off") : "5s");
+            break;
+        }
+    }
 
 #ifdef _WIN32
     /* SDL_CreateThread on Win ARM64 ends up dispatching through a heap-

@@ -112,6 +112,18 @@ void os_install_dump_trigger(os_dump_cb_t cb);
 void os_print_memory_map(uint64_t pc, uint64_t lr);
 
 
+/* ── shutdown watchdog ─────────────────────────────────────────── */
+
+/* End the process if `seconds` elapse before os_watchdog_disarm().
+ *
+ * For a call into a host library at shutdown that can wedge and never return.
+ * There is nothing left to save at that point, so a bounded wait is strictly
+ * better than a process that stays alive for ever.  `why` is written to stderr
+ * if it fires; pass 0 seconds to do nothing. */
+void os_watchdog_arm(unsigned seconds, const char *why);
+void os_watchdog_disarm(void);
+
+
 /* ── misc ──────────────────────────────────────────────────────── */
 
 /* Make SIGPIPE a no-op (POSIX); no-op on Win32 (sockets don't raise). */

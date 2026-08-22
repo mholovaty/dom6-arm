@@ -19,6 +19,8 @@
 #include <ucontext.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
+#include <pthread.h>
+#include <time.h>
 #include "loader_os.h"
 
 
@@ -138,6 +140,39 @@ void os_install_dump_trigger(os_dump_cb_t cb) {
 
 
 /* ── memory-map snapshot ───────────────────────────────────────── */
+
+/* ── shutdown watchdog ─────────────────────────────────────────── */
+
+/* A detached thread rather than alarm(2): the Mac binary installs handlers of
+ * its own and SIGALRM is not ours to take.  Polled so that disarming ends the
+ * thread promptly instead of leaving it asleep for the whole deadline. */
+static volatile sig_atomic_t watchdog_disarmed;
+static const char *watchdog_why;
+static unsigned    watchdog_seconds;
+
+static void *posix_watchdog(void *unused) {
+    (void)unused;
+    for (unsigned tenths = 0; tenths < watchdog_seconds * 10; tenths++) {
+        if (watchdog_disarmed) return NULL;
+        struct timespec t = { 0, 100 * 1000 * 1000 };
+        nanosleep(&t, NULL);
+    }
+    if (watchdog_disarmed) return NULL;
+    if (watchdog_why) (void)!write(STDERR_FILENO, watchdog_why, strlen(watchdog_why));
+    _exit(0);
+}
+
+void os_watchdog_arm(unsigned seconds, const char *why) {
+    if (!seconds) return;
+    watchdog_disarmed = 0;
+    watchdog_seconds  = seconds;
+    watchdog_why      = why;
+    pthread_t t;
+    if (pthread_create(&t, NULL, posix_watchdog, NULL) == 0) pthread_detach(t);
+}
+
+void os_watchdog_disarm(void) { watchdog_disarmed = 1; }
+
 
 void os_print_memory_map(uint64_t pc, uint64_t lr) {
     int fd = open("/proc/self/maps", O_RDONLY);
