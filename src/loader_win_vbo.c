@@ -48,18 +48,27 @@ typedef int           GLint;
 typedef int           GLsizei;
 typedef ptrdiff_t     GLsizeiptr;
 
-/* GL slot addresses in the Mac binary's GOT (from
- * build/loader/gen/gl_redirect.inc).  These are the slots whose function
- * pointers we install_win_vbo() patches. */
-#define SLOT_glBindBufferARB     ((volatile uint64_t*)0x0000000100ae0840UL)
-#define SLOT_glBufferDataARB     ((volatile uint64_t*)0x0000000100ae0858UL)
-#define SLOT_glDeleteBuffersARB  ((volatile uint64_t*)0x0000000100ae08a8UL)
-#define SLOT_glGenBuffersARB     ((volatile uint64_t*)0x0000000100ae0930UL)
-#define SLOT_glVertexPointer     ((volatile uint64_t*)0x0000000100ae0a38UL)
-#define SLOT_glColorPointer      ((volatile uint64_t*)0x0000000100ae08a0UL)
-#define SLOT_glNormalPointer     0  /* not in slot table — see install_win_vbo */
-#define SLOT_glTexCoordPointer   ((volatile uint64_t*)0x0000000100ae0a00UL)
-#define SLOT_glDrawElements      ((volatile uint64_t*)0x0000000100ae08e0UL)
+/* The Mac binary's GOT slots for the functions this file patches.
+ *
+ * RESOLVED BY NAME, never written down.  A slot address belongs to one build of the game:
+ * the segments after __TEXT sit wherever __TEXT's size leaves them, so a release that
+ * changes its size moves every slot in them.
+ *
+ * A stale address does not fail cleanly.  It patches whichever slot has taken it, which
+ * costs twice: the VBO slots keep the NOP stubs install_gl_redirect leaves them, so no
+ * geometry is ever uploaded and surfaces go missing, while some other function pointer is
+ * overwritten and the next call through it lands in the wrong code. */
+extern volatile uint64_t *gl_slot_for(const char *name);   /* loader_sdl_gl.c */
+
+static volatile uint64_t *SLOT_glBindBufferARB;
+static volatile uint64_t *SLOT_glBufferDataARB;
+static volatile uint64_t *SLOT_glDeleteBuffersARB;
+static volatile uint64_t *SLOT_glGenBuffersARB;
+static volatile uint64_t *SLOT_glVertexPointer;
+static volatile uint64_t *SLOT_glColorPointer;
+static volatile uint64_t *SLOT_glTexCoordPointer;
+static volatile uint64_t *SLOT_glDrawElements;
+/* glNormalPointer has no slot in dom6's table — see install_win_vbo. */
 
 /* ── State ────────────────────────────────────────────────────────── */
 
@@ -276,7 +285,38 @@ static void hook_glDrawElements(GLenum mode, GLsizei count, GLenum type,
 
 /* ── Install: patch GL slots after install_gl_redirect ───────────── */
 
+/* Bind every slot this file patches, by name.  Returns 0 if the table is missing one, which
+ * means this build's GL imports are not what the emulator was written against — better to
+ * leave the emulator unarmed and say so than to patch an address that belongs to something
+ * else. */
+static int resolve_gl_slots(void) {
+    static const struct { const char *name; volatile uint64_t **out; } wanted[] = {
+        { "glBindBufferARB",    &SLOT_glBindBufferARB    },
+        { "glBufferDataARB",    &SLOT_glBufferDataARB    },
+        { "glDeleteBuffersARB", &SLOT_glDeleteBuffersARB },
+        { "glGenBuffersARB",    &SLOT_glGenBuffersARB    },
+        { "glVertexPointer",    &SLOT_glVertexPointer    },
+        { "glColorPointer",     &SLOT_glColorPointer     },
+        { "glTexCoordPointer",  &SLOT_glTexCoordPointer  },
+        { "glDrawElements",     &SLOT_glDrawElements     },
+    };
+    int ok = 1;
+    for (size_t i = 0; i < sizeof wanted / sizeof wanted[0]; i++) {
+        *wanted[i].out = gl_slot_for(wanted[i].name);
+        if (!*wanted[i].out) {
+            fprintf(stderr, "[win-vbo] this build's GL slot table has no %s\n", wanted[i].name);
+            ok = 0;
+        }
+    }
+    return ok;
+}
+
 void install_win_vbo(void) {
+    if (!resolve_gl_slots()) {
+        fprintf(stderr, "[win-vbo] NOT armed — the game will run without vertex buffers.\n");
+        return;
+    }
+
     /* Capture the real (host) function pointers before we overwrite the
      * slots with our hooks, so the hooks can forward correctly AND so
      * try_promote_to_real_vbo can restore the un-hooked versions once
@@ -312,8 +352,9 @@ void install_win_vbo(void) {
     *SLOT_glDrawElements     = (uint64_t)(void *)hook_glDrawElements;
 
     fprintf(stderr,
-            "[win-vbo] installed: VBO emulator armed, will try to hand "
+            "[win-vbo] installed: VBO emulator armed at slot 0x%llx, will try to hand "
             "control to Mesa on first glGenBuffers (wgl=%s)\n",
+            (unsigned long long)(uintptr_t)SLOT_glGenBuffersARB,
             s_wgl_get_proc ? "ok" : "missing");
 }
 

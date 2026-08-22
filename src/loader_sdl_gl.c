@@ -165,6 +165,20 @@ typedef struct {
 /* gl_redirects[] table + GL_REDIRECT_COUNT. */
 #include "gl_redirect.inc"
 
+/* Where a GL function's GOT slot sits in the Mac binary, by name, or NULL.
+ *
+ * The table is generated per game build.  Anything that needs one of these slots asks here
+ * rather than writing the address down: every slot moves when the game is rebuilt, and a
+ * stale literal patches whichever slot has taken that address — a corrupted call rather than
+ * a clean failure.  See install_win_vbo. */
+volatile uint64_t *gl_slot_for(const char *name) {
+    for (size_t i = 0; i < GL_REDIRECT_COUNT; i++)
+        if (gl_redirects[i].name && !strcmp(gl_redirects[i].name, name))
+            return (volatile uint64_t *)(uintptr_t)gl_redirects[i].slot_addr;
+    return NULL;
+}
+
+
 void install_gl_redirect(void) {
     os_lib_t libgl  = os_lib_open("libGL.so.1");
     os_lib_t libglu = os_lib_open("libGLU.so.1");

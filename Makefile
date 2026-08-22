@@ -7,7 +7,7 @@
 # Portable across GNU make on Linux and MSYS2 (MinGW/CLANGARM64) on
 # Windows-on-ARM.
 
-.PHONY: build clean regen-data help
+.PHONY: build clean regen-data help check-va
 
 # ── Toolchain ────────────────────────────────────────────────────────
 CC          ?= cc
@@ -106,7 +106,7 @@ help:
 
 build: $(LOADER_BIN) $(BUILD_DIR)/DOM6_VERSION.txt
 
-$(LOADER_BIN): $(LOADER_SRC) | $(BUILD_DIR) data-check
+$(LOADER_BIN): $(LOADER_SRC) | $(BUILD_DIR) data-check check-va
 	$(CC) $(CFLAGS) -I$(SRC_DIR) -I$(DATA_DIR) \
 	    -o $@ $(LOADER_SRC) $(LDFLAGS) $(LDLIBS)
 
@@ -118,6 +118,27 @@ $(LOADER_BIN): $(LOADER_SRC) | $(BUILD_DIR) data-check
 .PHONY: $(BUILD_DIR)/DOM6_VERSION.txt
 $(BUILD_DIR)/DOM6_VERSION.txt: | $(BUILD_DIR)
 	@echo "$(DOM6_VERSION)" > $@
+
+# Every address inside the Mac binary belongs to ONE build of the game: the segments after
+# __TEXT sit wherever its size leaves them, so a release that changes that size moves them
+# all.  The generated tables under data/<version>/ follow the game; a literal written into
+# src/ does not, and it does not fail cleanly either — it reads or patches whatever has taken
+# that address.  So hand-written sources may not carry one.
+#
+# Ask the generated table instead (gl_slot_for(), the *_redirect tables, entry.inc).  If an
+# address genuinely has to be written down, generate it into data/<version>/.
+.PHONY: check-va
+check-va:
+	@bad=$$(grep -nE '0x0*1[0-9a-fA-F]{8}' $(SRC_DIR)/*.c $(SRC_DIR)/*.h 2>/dev/null \
+	        | grep -vE ':[0-9]+: *(\*|//|/\*)' \
+	        | grep -vE '0x0*100000000(UL)?L?L?\b'); \
+	if [ -n "$$bad" ]; then \
+	    echo "make: a Mac-binary address is written into hand-written source:"; \
+	    echo "$$bad" | sed 's/^/      /'; \
+	    echo "      These move with every game build. Resolve it from the generated"; \
+	    echo "      data/$(DOM6_VERSION)/ tables instead — see check-va in the Makefile."; \
+	    exit 1; \
+	fi
 
 .PHONY: data-check
 data-check:

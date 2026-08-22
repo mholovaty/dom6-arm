@@ -252,41 +252,25 @@ int main(int argc, char **argv) {
     install_win_vbo();
 
 #ifdef _WIN32
-    /* dom6's bgload_init (texture preload background threads) crashes on
-     * Win ARM64 when SDL_CreateThread runs its thread proc — the thread
-     * proc dispatches through a heap-resident SDL trampoline that doesn't
-     * survive the Mac ABI handoff.  --nothread doesn't suppress it.  Patch
-     * bgload_init's first instruction to `ret` (0xD65F03C0) so dom6 skips
-     * background loading entirely.  In server / textonly mode this only
-     * means save-file loads happen on the main thread — no functional loss.
-     * mmap'd __TEXT segment is RX — VirtualProtect to RWX for the write. */
-    /* bgload_init used to crash because SDL_CreateThread's thread proc
-     * trampoline didn't survive the Mac→Win ABI handoff.  We now stub
-     * SDL_CreateThread entirely (see install_sdl_redirect), so this
-     * patch is no longer needed.  Set DOM6_BGLOAD_PATCH=1 to re-enable
-     * the `mov w0,#0; ret` patch for debugging. */
-    if (getenv("DOM6_BGLOAD_PATCH")) {
-        void *bgload_init = (void *)0x10072c1bcULL;
-        DWORD old_prot;
-        if (VirtualProtect(bgload_init, 8, PAGE_EXECUTE_READWRITE, &old_prot)) {
-            ((uint32_t *)bgload_init)[0] = 0x52800000;  /* movz w0, #0 */
-            ((uint32_t *)bgload_init)[1] = 0xD65F03C0;  /* ret */
-            FlushInstructionCache(GetCurrentProcess(), bgload_init, 8);
-            VirtualProtect(bgload_init, 8, old_prot, &old_prot);
-        }
-    }
+    /* Nothing patches dom6's bgload_init here.  Its background texture threads only start
+     * through SDL_CreateThread, which install_sdl_redirect stubs on this platform, so there
+     * is nothing to suppress.
+     *
+     * Patching engine CODE needs the function located in the build at hand, never an address
+     * written down here: __TEXT changes size between releases, so no arithmetic carries such
+     * an address forward and a stale one lands mid-instruction.
+     */
 
-    /* Pre-mark dom6's SDL_DYNAPI init-done flag so the per-symbol
-     * dispatch trampolines (0x100016400, 0x10001641c, …) skip the
-     * resolver at 0x1000202dc.  If the resolver runs, it calls dom6's
-     * INTERNAL SDL_DYNAPI_entry (bl 0x100013060) which overwrites the
-     * 0x100ae6000+ vtable — and our install_sdl_redirect's host libSDL2
-     * pointers — with dom6_mac's built-in SDL stubs.  Skipping the
-     * init keeps our redirect intact. */
-    {
-        uint8_t *init_done_flag = (uint8_t *)0x104cb8caaULL;
-        *init_done_flag = 1;
-    }
+    /* Nothing pre-marks dom6's SDL_DYNAPI init-done flag here.  The redirect
+     * install_sdl_redirect writes survives without it.
+     *
+     * If it ever does need marking — the engine's own dynapi resolver calls its INTERNAL
+     * SDL_DYNAPI_entry, which fills the jump table with dom6's built-in stubs over the host
+     * pointers — the flag has to be located in the build at hand.  A byte address written
+     * down here is a silent write into whatever occupies it, which is worse than not
+     * marking the flag at all.
+     */
+
 #endif
 
     /* Transfer control to the Mac binary. */
@@ -294,9 +278,14 @@ int main(int argc, char **argv) {
 #ifdef _WIN32
     /* Also write a marker to a dedicated trace file so we know whether
      * mac_main returns even if stderr was closed/redirected mid-run. */
-    HANDLE trace_h = CreateFileA("C:\\msys64\\tmp\\dom6run\\boot.trace",
-                                 GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                 NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    /* DOM6_BOOT_TRACE names a file that records whether mac_main was entered and what it
+     * returned — the one thing stderr cannot tell you when it has been closed or redirected
+     * mid-run.  Unset by default: a fixed path is one developer's machine, not a feature. */
+    const char *trace_path = getenv("DOM6_BOOT_TRACE");
+    HANDLE trace_h = trace_path
+        ? CreateFileA(trace_path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                      NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)
+        : INVALID_HANDLE_VALUE;
     if (trace_h != INVALID_HANDLE_VALUE) {
         DWORD w;
         WriteFile(trace_h, "ENTER mac_main\n", 15, &w, NULL);
@@ -307,9 +296,10 @@ int main(int argc, char **argv) {
     fflush(stderr);
     int rc = mac_main(argc, argv, environ);
 #ifdef _WIN32
-    trace_h = CreateFileA("C:\\msys64\\tmp\\dom6run\\boot.trace",
-                          GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                          NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    trace_h = trace_path
+        ? CreateFileA(trace_path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                      NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)
+        : INVALID_HANDLE_VALUE;
     if (trace_h != INVALID_HANDLE_VALUE) {
         SetFilePointer(trace_h, 0, NULL, FILE_END);
         char buf[64];
