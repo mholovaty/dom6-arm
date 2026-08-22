@@ -344,6 +344,39 @@ void os_install_dump_trigger(os_dump_cb_t cb) {
 
 /* ── memory map snapshot ───────────────────────────────────────── */
 
+/* ── shutdown watchdog ─────────────────────────────────────────── */
+
+/* Polled so that disarming ends the thread promptly instead of leaving it
+ * asleep for the whole deadline.  See loader_os.h. */
+static volatile LONG watchdog_disarmed;
+static const char   *watchdog_why;
+static unsigned      watchdog_seconds;
+
+static DWORD WINAPI win32_watchdog(LPVOID unused) {
+    (void)unused;
+    for (unsigned tenths = 0; tenths < watchdog_seconds * 10; tenths++) {
+        if (watchdog_disarmed) return 0;
+        Sleep(100);
+    }
+    if (watchdog_disarmed) return 0;
+    if (watchdog_why) fputs(watchdog_why, stderr);
+    fflush(stderr);
+    _exit(0);
+    return 0;
+}
+
+void os_watchdog_arm(unsigned seconds, const char *why) {
+    if (!seconds) return;
+    watchdog_disarmed = 0;
+    watchdog_seconds  = seconds;
+    watchdog_why      = why;
+    HANDLE t = CreateThread(NULL, 0, win32_watchdog, NULL, 0, NULL);
+    if (t) CloseHandle(t);
+}
+
+void os_watchdog_disarm(void) { watchdog_disarmed = 1; }
+
+
 void os_print_memory_map(uint64_t pc, uint64_t lr) {
     HANDLE proc = GetCurrentProcess();
     HMODULE mods[1024];
