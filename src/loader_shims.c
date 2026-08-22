@@ -1270,6 +1270,55 @@ static int mac_close(int fd) {
 #endif
 
 
+/* system() — the engine's only way of telling the player something went wrong.
+ *
+ * Its fatal path shells out to whichever Unix dialog helper it can find:
+ *     zenity --error --text="Nagot gick fel: %s"
+ *     xmessage "Nagot gick fel: %s"
+ * That is the right call on a Mac desktop and wrong everywhere we run it. On Windows neither
+ * exists, so the shell prints "'zenity' is not recognized", the engine aborts, and a missing
+ * mod, a bad save and a failed connection all look identical — like a loader crash rather
+ * than something the game meant to say. Headless, a dialog would block a server on a box
+ * with nobody at it.
+ *
+ * So the MESSAGE is separated from the MECHANISM: pull the text out, then report it the way
+ * this platform reports things. Any other command still runs.
+ */
+static int mac_system(const char *cmd) {
+    SHIM_HIT(SHIM__system);
+    if (!cmd || (strncmp(cmd, "zenity", 6) != 0 && strncmp(cmd, "xmessage", 8) != 0))
+        return system(cmd);
+
+    char msg[1024];
+    const char *open_q  = strchr(cmd, '"');
+    const char *close_q = open_q ? strrchr(cmd, '"') : NULL;
+    if (open_q && close_q && close_q > open_q + 1) {
+        size_t n = (size_t)(close_q - open_q - 1);
+        if (n >= sizeof msg) n = sizeof msg - 1;
+        memcpy(msg, open_q + 1, n);
+        msg[n] = '\0';
+    } else {
+        snprintf(msg, sizeof msg, "%s", cmd);
+    }
+
+    /* Always in the log, whatever else happens — a headless run has nowhere else to put it,
+     * and a windowed run wants it recorded as well as shown. */
+    fprintf(stderr, "\n[dom6-loader] THE GAME REPORTS: %s\n\n", msg);
+    fflush(stderr);
+
+#ifdef _WIN32
+    MessageBoxA(NULL, msg, "Dominions 6", MB_OK | MB_ICONERROR);
+    return 0;
+#else
+    /* A desktop Linux box may genuinely have the helper the engine asked for; a server has
+     * neither it nor anyone to read it. Only shell out when there is a display to shell into. */
+    if (getenv("DISPLAY") || getenv("WAYLAND_DISPLAY"))
+        return system(cmd);
+    return 0;
+#endif
+}
+
+
 /* ── Mac va_list adapter ─────────────────────────────────────────────
  *
  * AArch64 macOS passes variadic args ALWAYS on the stack (never in

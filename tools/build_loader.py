@@ -72,7 +72,7 @@ LIBC_DIRECT = {
     # stdlib
     '_abort','_abs','_atexit','_atof','_atoi','_bsearch','_calloc',
     '_exit','_free','_getenv','_malloc','_putenv','_qsort','_rand',
-    '_realloc','_remove','_rmdir','_setenv','_srand','_system',
+    '_realloc','_remove','_rmdir','_setenv','_srand',
     '_freelocale','_newlocale','_setlocale','_uselocale',
     # POSIX I/O.  _open/_mkdir/_fopen are routed via SPECIAL_SLOTS to
     # mac_open / mac_mkdir / mac_fopen (path-translation shim for Win
@@ -232,6 +232,8 @@ SPECIAL_SLOTS = {
     '_fclose':   'mac_fclose',
     # close() must know whether the descriptor is a socket — see mac_close.
     '_close':    'mac_close',
+    # system() carries the engine's error dialog — see mac_system.
+    '_system':   'mac_system',
     '_mkdir':    'mac_mkdir',
     # readdir: Mac struct dirent has d_name @21 (it carries d_namlen); Linux
     # d_name is @19.  A direct libc bind hands dom6 a Linux-layout dirent, but

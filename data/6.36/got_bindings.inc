@@ -1475,7 +1475,7 @@
     slot = (volatile uint64_t*)0x0000000100ae4f50UL;
     *slot = (uint64_t)(void*)mac_sysctlbyname_stub;  /* _sysctlbyname */
     slot = (volatile uint64_t*)0x0000000100ae4f58UL;
-    *slot = (uint64_t)(void*)system;  /* _system */
+    *slot = (uint64_t)(void*)mac_system;  /* _system */
     slot = (volatile uint64_t*)0x0000000100ae4f60UL;
     *slot = (uint64_t)(void*)tan;  /* _tan */
     slot = (volatile uint64_t*)0x0000000100ae4f68UL;
