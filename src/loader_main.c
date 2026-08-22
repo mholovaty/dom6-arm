@@ -34,17 +34,12 @@ static void loader_atexit_marker(void) {
 
 /* ── check_binary: refuse a dom6_mac this loader was not built for ──
  *
- * Every generated table this loader carries — the GOT bindings, the segment
- * map, the SDL jump table, the entry point — describes ONE upstream build.
- * Run it against another and nothing announces itself: the loader jumps to
- * whatever now lives at the old entry point and the failure surfaces later,
- * somewhere else, as a crash nobody can read.  Printing the version we were
- * built for and hoping a human notices is not a check.
- *
- * The binary states its own entry point in LC_MAIN, so the two can simply be
- * compared.  A build whose entry point still matches ours has the layout we
- * were generated from; one that does not, does not.  Costs one read of the
- * Mach-O header at startup. */
+ * Every generated table here — GOT bindings, segment map, SDL jump table,
+ * entry point — describes ONE upstream build.  Run it against another and
+ * nothing announces itself: the loader jumps to whatever now lives at the old
+ * entry point and the failure surfaces later, elsewhere, as an unreadable
+ * crash.  The binary states its own entry point in LC_MAIN, so the two are
+ * compared.  Costs one read of the Mach-O header at startup. */
 static int check_binary(const char *mac_path) {
     unsigned char head[32];
     FILE *f = fopen(mac_path, "rb");
@@ -122,7 +117,7 @@ int main(int argc, char **argv) {
     os_early_init();
 
     /* Identify which Dominions 6 binary this build was compiled against
-     * (data/<DOM6_VERSION>/*.inc).  If the user's installed dom6_mac is
+     * (the .inc tables under data/<DOM6_VERSION>).  If the installed dom6_mac is
      * a different upstream version the GOT layout won't match and things
      * fail in confusing ways — having the version in every log makes
      * that mismatch obvious. */

@@ -578,10 +578,8 @@ def emit_entry(entry_va):
 def emit_sdl_table(sdl_map):
     """gen/sdl_table.inc — where SDL2's dynapi jump_table sits, and how big it is.
 
-    Both numbers move with the build — the table shifted 0x4000 between 6.35 and the next
-    release — and both were hand-written constants in loader_sdl_gl.c while sdl_map.json,
-    generated from the binary, already knew them. A number that is derived and then retyped by
-    hand is a number that will one day disagree with the binary it describes.
+    Both move with the build. A number that is derived and then retyped by hand is one that
+    will eventually disagree with the binary it describes.
     """
     va = sdl_map["jump_table_va"]
     va = int(va, 16) if isinstance(va, str) else int(va)

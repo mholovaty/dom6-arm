@@ -19,9 +19,8 @@
 #include "loader_altenter.h"
 #include <string.h>
 
-/* Both are GENERATED from the binary — see tools/build_loader.py:emit_sdl_table.  They move
- * with the build (the table shifted 0x4000 between 6.35 and the next release), and they were
- * hand-written here while sdl_map.json already carried them. */
+/* GENERATED from the binary — see tools/build_loader.py:emit_sdl_table.  Both move with the
+ * build, so neither is written by hand. */
 #include "sdl_table.inc"
 
 /* The redirect table's row type.  Generated table populates it. */

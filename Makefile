@@ -110,9 +110,8 @@ $(LOADER_BIN): $(LOADER_SRC) | $(BUILD_DIR) data-check
 # Surfaces the upstream Dominions 6 version this build targets — shipped
 # next to the binary in CI artifacts so users can confirm at a glance
 # which dom6_mac their downloaded loader matches.
-# ALWAYS rewritten, because it records a VALUE and not a file. Depending on the Makefile meant
-# a stamp that survived a version change: `make DOM6_VERSION=6.36` left it reading 6.35, so the
-# one artefact that says which game a loader was built for was the one artefact that lied.
+# ALWAYS rewritten: it records a VALUE, not a file, so depending on the Makefile let the stamp
+# survive a version change and report the wrong game.
 .PHONY: $(BUILD_DIR)/DOM6_VERSION.txt
 $(BUILD_DIR)/DOM6_VERSION.txt: | $(BUILD_DIR)
 	@echo "$(DOM6_VERSION)" > $@

@@ -27,7 +27,7 @@ jobs:
     name: Linux ARM64
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build dependencies
         # Caches the installed package set keyed on the literal `packages`
@@ -52,7 +52,7 @@ jobs:
           file dist/dom6_aarch64
           ls -la dist/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dom6_aarch64-linux
           path: dist/
@@ -65,7 +65,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: msys2/setup-msys2@v2
         with:
@@ -123,7 +123,7 @@ jobs:
           cp /clangarm64/bin/libzstd.dll         dist/arm64/
           ls -laR dist/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dom6_arm64-windows
           path: dist/
