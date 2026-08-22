@@ -32,12 +32,78 @@ static void loader_atexit_marker(void) {
 }
 #endif
 
+/* ── check_binary: refuse a dom6_mac this loader was not built for ──
+ *
+ * Every generated table this loader carries — the GOT bindings, the segment
+ * map, the SDL jump table, the entry point — describes ONE upstream build.
+ * Run it against another and nothing announces itself: the loader jumps to
+ * whatever now lives at the old entry point and the failure surfaces later,
+ * somewhere else, as a crash nobody can read.  Printing the version we were
+ * built for and hoping a human notices is not a check.
+ *
+ * The binary states its own entry point in LC_MAIN, so the two can simply be
+ * compared.  A build whose entry point still matches ours has the layout we
+ * were generated from; one that does not, does not.  Costs one read of the
+ * Mach-O header at startup. */
+static int check_binary(const char *mac_path) {
+    unsigned char head[32];
+    FILE *f = fopen(mac_path, "rb");
+    if (!f) return 0;                                      /* unreadable: let the mapper complain */
+    if (fread(head, 1, sizeof head, f) != sizeof head) { fclose(f); return 0; }
+    uint32_t magic = *(uint32_t *)head;
+    uint32_t ncmds = *(uint32_t *)(head + 16);
+    uint32_t sizeofcmds = *(uint32_t *)(head + 20);
+    if (magic != 0xFEEDFACFu || ncmds > 4096 || sizeofcmds > (1u << 20)) {
+        fclose(f);                                         /* not a 64-bit Mach-O: not ours to judge */
+        return 0;
+    }
+    unsigned char *cmds = (unsigned char *)malloc(sizeofcmds);
+    if (!cmds) { fclose(f); return 0; }
+    int verdict = 0;
+    if (fread(cmds, 1, sizeofcmds, f) == sizeofcmds) {
+        uint32_t off = 0;
+        for (uint32_t i = 0; i < ncmds && off + 8 <= sizeofcmds; i++) {
+            uint32_t cmd = *(uint32_t *)(cmds + off);
+            uint32_t csz = *(uint32_t *)(cmds + off + 4);
+            if (csz < 8 || off + csz > sizeofcmds) break;
+            if (cmd == 0x80000028u && csz >= 16) {         /* LC_MAIN */
+                uint64_t entryoff = *(uint64_t *)(cmds + off + 8);
+                uint64_t entry_va = 0x100000000ULL + entryoff;
+                if (entry_va != (uint64_t)MAC_ENTRYPOINT) {
+                    fprintf(stderr,
+                        "[dom6-loader] REFUSING TO RUN: this loader was built for Dominions 6 v%s,\n"
+                        "              whose entry point is 0x%llx, and %s says 0x%llx.\n"
+                        "              Every generated table here — GOT bindings, segment map, SDL\n"
+                        "              jump table — belongs to the other build, so running it would\n"
+                        "              fail somewhere else, later, as a crash nobody can read.\n"
+                        "              Build the loader for this game: make DOM6_VERSION=<ver>\n"
+                        "              MAC_BIN=%s regen-data && make DOM6_VERSION=<ver> build\n",
+#ifdef DOM6_VERSION_STR
+                        DOM6_VERSION_STR,
+#else
+                        "(unrecorded)",
+#endif
+                        (unsigned long long)MAC_ENTRYPOINT, mac_path,
+                        (unsigned long long)entry_va, mac_path);
+                    verdict = -1;
+                }
+                break;
+            }
+            off += csz;
+        }
+    }
+    free(cmds);
+    fclose(f);
+    return verdict;
+}
+
 /* ── mmap_segments: load Mac binary segments at their native VAs ──
  * Body is a sequence of mmap() calls generated from the binary's
  * LC_SEGMENT_64 load commands.  Run once at startup. */
 static int mmap_segments(const char *mac_path) {
     int fd = open(mac_path, O_RDONLY);
     if (fd < 0) { perror("open mac binary"); return -1; }
+    if (check_binary(mac_path) != 0) { close(fd); return -1; }
 #include "segments.inc"
     close(fd);
     return 0;
