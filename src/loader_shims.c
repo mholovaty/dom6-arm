@@ -1137,6 +1137,25 @@ static int mac_listen(int f, int b) {
             f, b, r, r ? WSAGetLastError() : 0);
     return r;
 }
+/* close() on a SOCKET.  On macOS a socket IS a file descriptor and close() ends it; on
+ * Windows a SOCKET is a separate handle space and the CRT's _close() rejects it with EBADF.
+ * The Mac binary closes its sockets with close(), so without this the engine reports
+ * "failed to close main sock", leaks the socket, opens another, and eventually aborts.
+ *
+ * Which space a descriptor belongs to is asked, not guessed: getsockopt(SO_TYPE) succeeds
+ * only for a socket. */
+static int mac_close(int fd) {
+    SHIM_HIT(SHIM__close);
+    int type = 0, len = (int)sizeof type;
+    if (getsockopt((SOCKET)fd, SOL_SOCKET, SO_TYPE, (char *)&type, &len) == 0) {
+        int r = closesocket((SOCKET)fd);
+        if (r) mac_set_errno_from_wsa(0);
+        WSTRACE("[shim] mac_close(sock=%d) = %d  err=%d\n",
+                fd, r, r ? WSAGetLastError() : 0);
+        return r;
+    }
+    return _close(fd);
+}
 /* Translate Mac MSG_* flag bits to Win equivalents.
  *   Mac MSG_OOB         = 0x0001  → Win MSG_OOB         = 0x0001
  *   Mac MSG_PEEK        = 0x0002  → Win MSG_PEEK        = 0x0002
@@ -1240,6 +1259,15 @@ int __snprintf_chk(char *s, size_t maxlen, int flag, size_t slen, const char *fm
 }
 
 #endif  /* _WIN32 */
+
+#ifndef _WIN32
+/* POSIX has one descriptor space, so close() already ends a socket. Present only because the
+ * generated GOT binds _close to this name on every platform. */
+static int mac_close(int fd) {
+    SHIM_HIT(SHIM__close);
+    return close(fd);
+}
+#endif
 
 
 /* ── Mac va_list adapter ─────────────────────────────────────────────

@@ -911,7 +911,7 @@
     slot = (volatile uint64_t*)0x0000000100ae4680UL;
     *slot = (uint64_t)(void*)calloc;  /* _calloc */
     slot = (volatile uint64_t*)0x0000000100ae4688UL;
-    *slot = (uint64_t)(void*)close;  /* _close */
+    *slot = (uint64_t)(void*)mac_close;  /* _close */
     slot = (volatile uint64_t*)0x0000000100ae4690UL;
     *slot = (uint64_t)(void*)closedir;  /* _closedir */
     slot = (volatile uint64_t*)0x0000000100ae4698UL;
