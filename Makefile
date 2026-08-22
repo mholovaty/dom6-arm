@@ -110,7 +110,10 @@ $(LOADER_BIN): $(LOADER_SRC) | $(BUILD_DIR) data-check
 # Surfaces the upstream Dominions 6 version this build targets — shipped
 # next to the binary in CI artifacts so users can confirm at a glance
 # which dom6_mac their downloaded loader matches.
-$(BUILD_DIR)/DOM6_VERSION.txt: Makefile | $(BUILD_DIR)
+# ALWAYS rewritten: it records a VALUE, not a file, so depending on the Makefile let the stamp
+# survive a version change and report the wrong game.
+.PHONY: $(BUILD_DIR)/DOM6_VERSION.txt
+$(BUILD_DIR)/DOM6_VERSION.txt: | $(BUILD_DIR)
 	@echo "$(DOM6_VERSION)" > $@
 
 .PHONY: data-check

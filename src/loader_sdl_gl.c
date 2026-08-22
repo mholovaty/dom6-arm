@@ -19,8 +19,9 @@
 #include "loader_altenter.h"
 #include <string.h>
 
-#define SDL_JUMP_TABLE_VA  0x100ae5e58UL
-#define SDL_SLOT_COUNT     836
+/* GENERATED from the binary — see tools/build_loader.py:emit_sdl_table.  Both move with the
+ * build, so neither is written by hand. */
+#include "sdl_table.inc"
 
 /* The redirect table's row type.  Generated table populates it. */
 typedef struct {
