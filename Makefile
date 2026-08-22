@@ -59,8 +59,8 @@ endif
 
 # ── Paths ────────────────────────────────────────────────────────────
 # The NEWEST tables we carry, so a plain `make build` targets the current game rather than
-# whichever release was current when this line was last edited. Override to build an older one:
-# `make DOM6_VERSION=6.35 build`.
+# whichever release was current when this line was last edited. Only the release we target is
+# kept — old tables are dropped on migration, since the loader refuses any binary but its own.
 DOM6_VERSION ?= $(lastword $(sort $(notdir $(wildcard data/*))))
 SRC_DIR      := src
 DATA_DIR     := data/$(DOM6_VERSION)

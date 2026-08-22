@@ -28,7 +28,7 @@ Usage:
   python3 tools/sdl_lookup.py \\
       --mac-bin origin/dom6_mac \\
       --sdl-archive /opt/homebrew/Cellar/sdl2/2.32.10/lib/libSDL2.a \\
-      --out data/6.35/sdl_map.json
+      --out data/<ver>/sdl_map.json
 """
 
 import sys, os, re, struct, json, argparse, subprocess, tempfile

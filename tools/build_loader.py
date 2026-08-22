@@ -37,7 +37,8 @@ from pathlib import Path
 REPO    = Path(__file__).resolve().parent.parent
 # Defaults — overridden by main()'s argparse before any data is read.
 MAC_BIN = REPO / "origin" / "dom6_mac"
-GEN_DIR = REPO / "data" / "6.35"
+GEN_DIR = REPO / "data" / sorted(p.name for p in (REPO / "data").iterdir())[-1] \
+    if (REPO / "data").is_dir() else REPO / "data"
 
 # ── Symbol classification ────────────────────────────────────────────────────
 
@@ -596,7 +597,7 @@ def main():
     global MAC_BIN, GEN_DIR
     ap = argparse.ArgumentParser(
         description="Regenerate the binary-dependent .inc data tables for one "
-                    "dom6 release.  Writes into --out (default data/6.35/).")
+                    "dom6 release.  Writes into --out (default: the newest data/<ver>/).")
     ap.add_argument("--mac-bin", default=str(MAC_BIN),
                     help="path to dom6_mac (default: origin/dom6_mac)")
     ap.add_argument("--out", default=str(GEN_DIR),
