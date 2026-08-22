@@ -575,6 +575,22 @@ def emit_entry(entry_va):
         f"{HEADER}\n#define MAC_ENTRYPOINT 0x{entry_va:016x}UL\n")
 
 
+def emit_sdl_table(sdl_map):
+    """gen/sdl_table.inc — where SDL2's dynapi jump_table sits, and how big it is.
+
+    Both numbers move with the build — the table shifted 0x4000 between 6.35 and the next
+    release — and both were hand-written constants in loader_sdl_gl.c while sdl_map.json,
+    generated from the binary, already knew them. A number that is derived and then retyped by
+    hand is a number that will one day disagree with the binary it describes.
+    """
+    va = sdl_map["jump_table_va"]
+    va = int(va, 16) if isinstance(va, str) else int(va)
+    (GEN_DIR / "sdl_table.inc").write_text(
+        f"{HEADER}\n"
+        f"#define SDL_JUMP_TABLE_VA  0x{va:016x}UL\n"
+        f"#define SDL_SLOT_COUNT     {int(sdl_map['slot_count'])}\n")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -652,6 +668,7 @@ def main():
     emit_got_bindings(binding_slots, sym_map, shim_table)
     emit_segments(segments)
     emit_entry(binary.entrypoint)
+    emit_sdl_table(sdl_map)
 
     # GEN_DIR was resolved to an absolute path; print relative to REPO when
     # under it, else just print the absolute path.
