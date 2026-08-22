@@ -24,8 +24,16 @@ concurrency:
 
 jobs:
   linux-arm64:
-    name: Linux ARM64
+    # ONE ARTEFACT PER GAME VERSION. The loader's tables describe one upstream build and it
+    # refuses any other, so a single artefact built at the Makefile default silently expects
+    # whichever release that happens to be — and a player whose Steam copy has moved on gets a
+    # binary that will not run.
+    name: Linux ARM64 (${{ matrix.dom6_version }})
     runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        dom6_version: ['6.35', '6.36']
     steps:
       - uses: actions/checkout@v7
 
@@ -40,7 +48,7 @@ jobs:
           version: 1.0  # bump to force a rebuild even when packages list is unchanged
 
       - name: make build
-        run: make build
+        run: make DOM6_VERSION=${{ matrix.dom6_version }} build
 
       - name: Stage runtime distribution
         # DOM6_VERSION.txt sits next to the binary so users can confirm
@@ -54,13 +62,17 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: dom6_aarch64-linux
+          name: dom6_aarch64-linux-${{ matrix.dom6_version }}
           path: dist/
           if-no-files-found: error
 
   windows-arm64:
-    name: Windows ARM64
+    name: Windows ARM64 (${{ matrix.dom6_version }})
     runs-on: windows-11-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        dom6_version: ['6.35', '6.36']
     defaults:
       run:
         shell: msys2 {0}
@@ -86,7 +98,7 @@ jobs:
             mingw-w64-clang-aarch64-mesa
 
       - name: make LOADER_OS=win32 STATIC=1 build
-        run: make LOADER_OS=win32 CC=clang STATIC=1 build
+        run: make LOADER_OS=win32 CC=clang STATIC=1 DOM6_VERSION=${{ matrix.dom6_version }} build
 
       - name: Stage runtime distribution
         # STATIC=1 bakes zlib/bzip2/winpthread + the gcc runtime into the
@@ -125,6 +137,6 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: dom6_arm64-windows
+          name: dom6_arm64-windows-${{ matrix.dom6_version }}
           path: dist/
           if-no-files-found: error
