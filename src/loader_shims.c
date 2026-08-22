@@ -13,6 +13,9 @@
  * memory note. */
 #include "loader_common.h"
 #include "loader_counters.h"
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
 
 /* ── NOP stubs ──────────────────────────────────────────────────── */
 static int       mac_nop_func(void)    { return 0; }
@@ -429,6 +432,80 @@ static FILE *mac_popen(const char *cmd, const char *mode) {
 #endif
 }
 
+/* ── optional debug plugin ─────────────────────────────────────────────────
+ * `DOM6_PLUGIN=/path/to/plugin.so` loads a private extension into the game process.
+ * The plugin may export either entry point:
+ *     void dom6_plugin_init(void);              once, on first file access
+ *     void dom6_plugin_on_file(const char *p);  per fopen, on the game's own thread
+ * The per-file callback matters: the game is single-threaded, and calling into its
+ * code from any other thread crashes it — this hook is a point where the engine is
+ * quiescent and its state is consistent.
+ * Keeping this generic lets experiment-specific tooling live outside this repo. */
+static void (*g_plugin_on_file)(const char *);
+static void (*g_plugin_on_close)(const char *);
+
+/* Remember the path a FILE* was opened with, so the close hook can name the file. A small
+ * fixed table is enough: dom6 keeps very few files open at once. */
+#define PLUG_TRACK 64
+static struct { FILE *fp; char path[512]; } g_open_files[PLUG_TRACK];
+
+static void plugin_track_open(FILE *fp, const char *path) {
+    if (!fp || !g_plugin_on_close) return;
+    for (int i = 0; i < PLUG_TRACK; i++) {
+        if (!g_open_files[i].fp) {
+            g_open_files[i].fp = fp;
+            snprintf(g_open_files[i].path, sizeof g_open_files[i].path, "%s", path);
+            return;
+        }
+    }
+}
+
+/* Called just BEFORE the close, while the game is quiescent and its state is consistent —
+ * for a file the game has just finished READING, that is the moment its contents have been
+ * fully applied, which is what makes this useful to an experiment. */
+static void plugin_dispatch_close(FILE *fp) {
+    if (!fp || !g_plugin_on_close) return;
+    for (int i = 0; i < PLUG_TRACK; i++) {
+        if (g_open_files[i].fp == fp) {
+            g_plugin_on_close(g_open_files[i].path);
+            g_open_files[i].fp = NULL;
+            return;
+        }
+    }
+}
+
+static void plugin_dispatch(const char *path) {
+#ifndef _WIN32
+    static int loaded = 0;
+    if (!loaded) {
+        loaded = 1;
+        const char *so = getenv("DOM6_PLUGIN");
+        if (so && *so) {
+            void *h = dlopen(so, RTLD_NOW | RTLD_LOCAL);
+            if (!h) {
+                fprintf(stderr, "[plugin] %s\n", dlerror());
+            } else {
+                void (*init)(void) = (void (*)(void))dlsym(h, "dom6_plugin_init");
+                g_plugin_on_file = (void (*)(const char *))dlsym(h, "dom6_plugin_on_file");
+                g_plugin_on_close =
+                    (void (*)(const char *))dlsym(h, "dom6_plugin_on_file_close");
+                if (init) init();
+            }
+        }
+    }
+    if (g_plugin_on_file) g_plugin_on_file(path);
+#else
+    (void)path;
+#endif
+}
+
+/* ── mac_fclose shim — only here so the plugin gets a per-file CLOSE callback; the close
+ * itself is plain fclose. */
+static int mac_fclose(FILE *fp) {
+    plugin_dispatch_close(fp);
+    return fclose(fp);
+}
+
 /* ── mac_fopen shim — same path translation, no variadic complication */
 static FILE *mac_fopen(const char *path, const char *mode) {
     SHIM_HIT(SHIM__fopen);
@@ -446,6 +523,8 @@ static FILE *mac_fopen(const char *path, const char *mode) {
     char buf[1024];
     const char *p = mac_translate_path(path, buf, sizeof buf);
     FILE *fp = fopen(p, mode);
+    plugin_dispatch(p);
+    plugin_track_open(fp, p);
 #ifdef _WIN32
     if (!fp && getenv("DOM6_LOADER_TRACE"))
         fprintf(stderr, "[shim] mac_fopen → NULL (errno=%d) for '%s'\n", errno, p);

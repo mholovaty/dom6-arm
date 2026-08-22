@@ -959,7 +959,7 @@
     slot = (volatile uint64_t*)0x0000000100ae0740UL;
     *slot = (uint64_t)(void*)expf;  /* _expf */
     slot = (volatile uint64_t*)0x0000000100ae0748UL;
-    *slot = (uint64_t)(void*)fclose;  /* _fclose */
+    *slot = (uint64_t)(void*)mac_fclose;  /* _fclose */
     slot = (volatile uint64_t*)0x0000000100ae0750UL;
     *slot = (uint64_t)(void*)mac_fcntl;  /* _fcntl */
     slot = (volatile uint64_t*)0x0000000100ae0758UL;
