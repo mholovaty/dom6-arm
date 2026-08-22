@@ -58,7 +58,10 @@ else
 endif
 
 # ── Paths ────────────────────────────────────────────────────────────
-DOM6_VERSION ?= 6.35
+# The NEWEST tables we carry, so a plain `make build` targets the current game rather than
+# whichever release was current when this line was last edited. Only the release we target is
+# kept — old tables are dropped on migration, since the loader refuses any binary but its own.
+DOM6_VERSION ?= $(lastword $(sort $(notdir $(wildcard data/*))))
 SRC_DIR      := src
 DATA_DIR     := data/$(DOM6_VERSION)
 
@@ -110,7 +113,10 @@ $(LOADER_BIN): $(LOADER_SRC) | $(BUILD_DIR) data-check
 # Surfaces the upstream Dominions 6 version this build targets — shipped
 # next to the binary in CI artifacts so users can confirm at a glance
 # which dom6_mac their downloaded loader matches.
-$(BUILD_DIR)/DOM6_VERSION.txt: Makefile | $(BUILD_DIR)
+# ALWAYS rewritten: it records a VALUE, not a file, so depending on the Makefile let the stamp
+# survive a version change and report the wrong game.
+.PHONY: $(BUILD_DIR)/DOM6_VERSION.txt
+$(BUILD_DIR)/DOM6_VERSION.txt: | $(BUILD_DIR)
 	@echo "$(DOM6_VERSION)" > $@
 
 .PHONY: data-check

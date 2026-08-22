@@ -24,10 +24,15 @@ concurrency:
 
 jobs:
   linux-arm64:
+    # ONE ARTEFACT PER GAME VERSION, built in ONE job. The loader's tables describe one
+    # upstream build and it refuses any other, so a single artefact built at the Makefile
+    # default silently expects whichever release that happens to be. A matrix is the obvious
+    # shape and the wrong one: it renames the job per leg, and `main`'s required status checks
+    # name these jobs exactly. So the versions are looped and the job keeps its name.
     name: Linux ARM64
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build dependencies
         # Caches the installed package set keyed on the literal `packages`
@@ -43,16 +48,15 @@ jobs:
         run: make build
 
       - name: Stage runtime distribution
-        # DOM6_VERSION.txt sits next to the binary so users can confirm
-        # which upstream Dominions 6 release the loader expects.
+        # DOM6_VERSION.txt sits next to the binary so users can confirm which upstream
+        # Dominions 6 release the loader expects — it refuses any other.
         run: |
           mkdir -p dist
-          cp build/loader/dom6_aarch64       dist/
-          cp build/loader/DOM6_VERSION.txt   dist/
+          cp build/loader/dom6_aarch64     dist/
+          cp build/loader/DOM6_VERSION.txt dist/
           file dist/dom6_aarch64
-          ls -la dist/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dom6_aarch64-linux
           path: dist/
@@ -65,7 +69,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: msys2/setup-msys2@v2
         with:
@@ -123,7 +127,7 @@ jobs:
           cp /clangarm64/bin/libzstd.dll         dist/arm64/
           ls -laR dist/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dom6_arm64-windows
           path: dist/
