@@ -79,7 +79,7 @@ LIBC_DIRECT = {
     # drop-in compat).  _fcntl uses mac_fcntl (O_NONBLOCK/O_APPEND
     # constants differ).
     # _readdir routed via SPECIAL_SLOTS → mac_readdir (dirent layout differs).
-    '_close','_closedir','_mmap','_mprotect','_munmap',
+    '_closedir','_mmap','_mprotect','_munmap',
     '_opendir','_pclose','_popen','_read','_rewinddir',
     '_stat','_sysconf','_write',
     # POSIX network
@@ -230,6 +230,8 @@ SPECIAL_SLOTS = {
     '_open':     'mac_open',
     '_fopen':    'mac_fopen',
     '_fclose':   'mac_fclose',
+    # close() must know whether the descriptor is a socket — see mac_close.
+    '_close':    'mac_close',
     '_mkdir':    'mac_mkdir',
     # readdir: Mac struct dirent has d_name @21 (it carries d_namlen); Linux
     # d_name is @19.  A direct libc bind hands dom6 a Linux-layout dirent, but
