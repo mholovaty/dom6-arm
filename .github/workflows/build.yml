@@ -44,19 +44,17 @@ jobs:
           packages: build-essential libgl1-mesa-dev libglu1-mesa-dev libbz2-dev zlib1g-dev
           version: 1.0  # bump to force a rebuild even when packages list is unchanged
 
-      - name: make build (every version we carry tables for)
-        run: |
-          for v in $(ls data); do
-            echo "::group::$v"
-            make DOM6_VERSION="$v" clean build
-            mkdir -p "dist/$v"
-            cp build/loader/dom6_aarch64     "dist/$v/"
-            cp build/loader/DOM6_VERSION.txt "dist/$v/"
-            echo "::endgroup::"
-          done
+      - name: make build
+        run: make build
 
-      - name: Show what was staged
-        run: ls -laR dist/
+      - name: Stage runtime distribution
+        # DOM6_VERSION.txt sits next to the binary so users can confirm which upstream
+        # Dominions 6 release the loader expects — it refuses any other.
+        run: |
+          mkdir -p dist
+          cp build/loader/dom6_aarch64     dist/
+          cp build/loader/DOM6_VERSION.txt dist/
+          file dist/dom6_aarch64
 
       - uses: actions/upload-artifact@v7
         with:
@@ -91,14 +89,8 @@ jobs:
             mingw-w64-clang-aarch64-SDL2
             mingw-w64-clang-aarch64-mesa
 
-      - name: make LOADER_OS=win32 STATIC=1 build (every version)
-        run: |
-          for v in $(ls data); do
-            make LOADER_OS=win32 CC=clang STATIC=1 DOM6_VERSION="$v" clean build
-            mkdir -p "built/$v"
-            cp build/loader/dom6_arm64.exe   "built/$v/"
-            cp build/loader/DOM6_VERSION.txt "built/$v/"
-          done
+      - name: make LOADER_OS=win32 STATIC=1 build
+        run: make LOADER_OS=win32 CC=clang STATIC=1 build
 
       - name: Stage runtime distribution
         # STATIC=1 bakes zlib/bzip2/winpthread + the gcc runtime into the
@@ -112,9 +104,8 @@ jobs:
         # dom6 (needs GL 1.2+ packed pixel formats for textures).
         run: |
           mkdir -p dist/arm64
-          # One exe per game version, each beside its own stamp; the DLLs below are shared by
-          # all of them and stay in arm64/ where the loader's search path expects them.
-          cp -r built/* dist/
+          cp build/loader/dom6_arm64.exe   dist/
+          cp build/loader/DOM6_VERSION.txt dist/
           # SDL2 + zlib (the latter is a Mesa transitive dep).
           cp /clangarm64/bin/SDL2.dll  dist/arm64/
           cp /clangarm64/bin/zlib1.dll dist/arm64/

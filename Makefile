@@ -58,7 +58,10 @@ else
 endif
 
 # ── Paths ────────────────────────────────────────────────────────────
-DOM6_VERSION ?= 6.35
+# The NEWEST tables we carry, so a plain `make build` targets the current game rather than
+# whichever release was current when this line was last edited. Override to build an older one:
+# `make DOM6_VERSION=6.35 build`.
+DOM6_VERSION ?= $(lastword $(sort $(notdir $(wildcard data/*))))
 SRC_DIR      := src
 DATA_DIR     := data/$(DOM6_VERSION)
 
