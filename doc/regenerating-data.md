@@ -24,7 +24,7 @@ binary).  Mismatch is a loud, immediate error.
 
 ```bash
 make regen-data \
-    DOM6_VERSION=6.36 \
+    DOM6_VERSION=6.37 \
     MAC_BIN=/path/to/dom6_mac \
     SDL_ARCHIVE=/path/to/libSDL2.a
 ```
@@ -33,12 +33,12 @@ This runs two scripts in sequence:
 
 1. **`tools/sdl_lookup.py`** — extracts SDL2's dynapi jump-table layout
    from `libSDL2.a` (the slot order), scans `dom6_mac` for the
-   jump-table address, writes `data/6.36/sdl_map.json`.
+   jump-table address, writes `data/6.37/sdl_map.json`.
 2. **`tools/build_loader.py`** — reads `dom6_mac` (segments, GOT
    bindings, imports), classifies every imported symbol, and writes the
    8 `.inc` files (`entry.inc`, `segments.inc`, `got_bindings.inc`,
    `shim_enum.inc`, `shim_table.inc`, `shim_thunks.inc`,
-   `gl_redirect.inc`, `sdl_redirect.inc`) into `data/6.36/`.
+   `gl_redirect.inc`, `sdl_redirect.inc`) into `data/6.37/`.
 
 Total runtime: a few seconds.  Total output: ~280 KB per release.
 
