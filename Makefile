@@ -101,7 +101,7 @@ help:
 	@echo ""
 	@echo "Override on the command line:  CC, CFLAGS, LDLIBS, PYTHON, MAC_BIN, DOM6_VERSION"
 	@echo "Cross-build for Windows:       make LOADER_OS=win32 CC=clang"
-	@echo "Pick a different game version: make DOM6_VERSION=6.36"
+	@echo "Pick a different game version: make DOM6_VERSION=<one of: $$(ls data 2>/dev/null | tr '\n' ' ')>"
 	@echo "Static-link zlib/bzip2/pthread:make STATIC=1"
 
 build: $(LOADER_BIN) $(BUILD_DIR)/DOM6_VERSION.txt
